@@ -251,7 +251,7 @@ int initialize();
 /**
 * get a page of memory from the OS to use
 */
-int more_memory();
+int more_memory(void *page);
 
 #endif /* START_S */
 
