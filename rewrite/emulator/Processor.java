@@ -4,9 +4,8 @@ package emulator;
 
 import hardware.Interrupt;
 import machine.Machine;
-import machine.Config;
 import machine.Lib;
-import machine.TranslationEntry;
+import machine.Page;
 
 /**
  * The <tt>Processor</tt> class simulates a MIPS processor that supports a
@@ -25,7 +24,9 @@ import machine.TranslationEntry;
  */
 public final class Processor {
 	// system memory
-	private Memory memory;
+	public Memory memory;
+	
+	private Machine machine;
 	
 	
 	/**
@@ -36,13 +37,11 @@ public final class Processor {
 	 * @param numPhysPages
 	 *            the number of pages of physical memory to attach.
 	 */
-	public Processor(Memory memory) {
-		System.out.print(" processor");
-
+	public Processor(Machine machine) {
+		this.machine = machine;
+		
 		for (int i = 0; i < numUserRegisters; i++)
 			registers[i] = 0;
-		
-		this.memory = memory;
 	}
 
 	/**
@@ -99,8 +98,6 @@ public final class Processor {
 	 *            the value to write.
 	 */
 	public void writeRegister(int number, int value) {
-		Lib.assert_(number >= 0 && number < numUserRegisters);
-
 		if (number != 0)
 			registers[number] = value;
 	}
@@ -176,164 +173,165 @@ public final class Processor {
 	public static final char dbgDisassemble = 'm';
 	public static final char dbgFullDisassemble = 'M';
 
-		public void run() throws MipsException {
-			// hopefully this looks familiar to 152 students?
-			fetch();
-			decode();
-			execute();
-			writeBack();
+	public void run() throws MipsException {
+		// hopefully this looks familiar to 152 students?
+		fetch();
+		decode();
+		execute();
+		writeBack();
+
+		// check interrupts here
+		Interrupt interrupt = machine.getInterrupts().poll();
+
+		if(interrupt != null){
+			machine.interrupting = interrupt;
+			throw new MipsException(this, memory, MipsException.exceptionInterrupt);
+		}
+	}
+
+	private boolean test(int flag) {
+		return Lib.test(flag, flags);
+	}
+
+	private void fetch() throws MipsException {
+		
+		//System.out.println(this.registers[Processor.regRA]);
+		
+		//System.out.print("pc: " + Integer.toHexString(registers[regPC]) + " ");
+		
+		value = memory.readMem(registers[regPC], 4);
+	}
+
+	private void decode() {
+		op = Lib.extract(value, 26, 6);
+		rs = Lib.extract(value, 21, 5);
+		rt = Lib.extract(value, 16, 5);
+		rd = Lib.extract(value, 11, 5);
+		sh = Lib.extract(value, 6, 5);
+		func = Lib.extract(value, 0, 6);
+		target = Lib.extract(value, 0, 26);
+		imm = Lib.extend(value, 0, 16);
+
+		Mips info;
+		switch (op) {
+		case 0:
+			info = Mips.specialtable[func];
 			
-			// check interrupts here
-			Interrupt interrupt = Machine.getInterrupts().poll();
-			
-			if(interrupt != null){
-				Machine.interrupting = interrupt;
-				throw new MipsException(this, memory, MipsException.exceptionInterrupt);
-			}
+			break;
+		case 1:
+			info = Mips.regimmtable[rt];
+			break;
+		default:
+			info = Mips.optable[op];
+			break;
 		}
 
-		private boolean test(int flag) {
-			return Lib.test(flag, flags);
+		operation = info.operation;
+		name = info.name;
+		format = info.format;
+		flags = info.flags;
+
+		mask = 0xFFFFFFFF;
+		branch = true;
+
+		// get memory access size
+		if (test(Mips.SIZEB))
+			size = 1;
+		else if (test(Mips.SIZEH))
+			size = 2;
+		else if (test(Mips.SIZEW))
+			size = 4;
+		else
+			size = 0;
+
+		// get nextPC
+		nextPC = registers[regNextPC] + 4;
+
+		// get dstReg
+		if (test(Mips.DSTRA))
+			dstReg = regRA;
+		else if (format == Mips.IFMT)
+			dstReg = rt;
+		else if (format == Mips.RFMT)
+			dstReg = rd;
+		else
+			dstReg = -1;
+
+		// get jtarget
+		if (format == Mips.RFMT)
+			jtarget = registers[rs];
+		else if (format == Mips.IFMT)
+			jtarget = registers[regNextPC] + (imm << 2);
+		else if (format == Mips.JFMT)
+			jtarget = (registers[regNextPC] & 0xF0000000) | (target << 2);
+		else
+			jtarget = -1;
+
+		// get imm
+		if (test(Mips.UNSIGNED)) {
+			imm &= 0xFFFF;
 		}
 
-		private void fetch() throws MipsException {
-			if ((Lib.test(dbgDisassemble) && !Lib.test(dbgProcessor))
-					|| Lib.test(dbgFullDisassemble))
-				System.out.print("PC=0x" + Lib.toHexString(registers[regPC])
-						+ "\t");
+		// get addr
+		addr = registers[rs] + imm;
 
-			value = memory.readMem(registers[regPC], 4);
+		// get src1
+		if (test(Mips.SRC1SH))
+			src1 = sh;
+		else
+			src1 = registers[rs];
+
+		// get src2
+		if (test(Mips.SRC2IMM))
+			src2 = imm;
+		else
+			src2 = registers[rt];
+
+		if (test(Mips.UNSIGNED)) {
+			src1 &= 0xFFFFFFFFL;
+			src2 &= 0xFFFFFFFFL;
 		}
 
-		private void decode() {
-			op = Lib.extract(value, 26, 6);
-			rs = Lib.extract(value, 21, 5);
-			rt = Lib.extract(value, 16, 5);
-			rd = Lib.extract(value, 11, 5);
-			sh = Lib.extract(value, 6, 5);
-			func = Lib.extract(value, 0, 6);
-			target = Lib.extract(value, 0, 26);
-			imm = Lib.extend(value, 0, 16);
+		//System.out.print(Integer.toHexString(value) + "  ");
+		//EmulatorHelpers.print(this);
+	}
 
-			Mips info;
-			switch (op) {
-			case 0:
-				info = Mips.specialtable[func];
-				break;
-			case 1:
-				info = Mips.regimmtable[rt];
-				break;
-			default:
-				info = Mips.optable[op];
-				break;
+	private void execute() throws MipsException {
+		int value;
+		int preserved;
+
+		switch (operation) {
+		case Mips.ADD:
+			dst = src1 + src2;
+			break;
+		case Mips.SUB:
+			dst = src1 - src2;
+			break;
+		case Mips.MULT:
+			dst = src1 * src2;
+			registers[regLo] = (int) Lib.extract(dst, 0, 32);
+			registers[regHi] = (int) Lib.extract(dst, 32, 32);
+			break;
+		case Mips.DIV:
+			try {
+				registers[regLo] = (int) (src1 / src2);
+				registers[regHi] = (int) (src1 % src2);
+				if (registers[regLo] * src2 + registers[regHi] != src1)
+					throw new ArithmeticException();
+			} catch (ArithmeticException e) {
+				throw new MipsException(this, memory, MipsException.exceptionOverflow);
 			}
+			break;
 
-			operation = info.operation;
-			name = info.name;
-			format = info.format;
-			flags = info.flags;
-
-			mask = 0xFFFFFFFF;
-			branch = true;
-
-			// get memory access size
-			if (test(Mips.SIZEB))
-				size = 1;
-			else if (test(Mips.SIZEH))
-				size = 2;
-			else if (test(Mips.SIZEW))
-				size = 4;
-			else
-				size = 0;
-
-			// get nextPC
-			nextPC = registers[regNextPC] + 4;
-
-			// get dstReg
-			if (test(Mips.DSTRA))
-				dstReg = regRA;
-			else if (format == Mips.IFMT)
-				dstReg = rt;
-			else if (format == Mips.RFMT)
-				dstReg = rd;
-			else
-				dstReg = -1;
-
-			// get jtarget
-			if (format == Mips.RFMT)
-				jtarget = registers[rs];
-			else if (format == Mips.IFMT)
-				jtarget = registers[regNextPC] + (imm << 2);
-			else if (format == Mips.JFMT)
-				jtarget = (registers[regNextPC] & 0xF0000000) | (target << 2);
-			else
-				jtarget = -1;
-
-			// get imm
-			if (test(Mips.UNSIGNED)) {
-				imm &= 0xFFFF;
-			}
-
-			// get addr
-			addr = registers[rs] + imm;
-
-			// get src1
-			if (test(Mips.SRC1SH))
-				src1 = sh;
-			else
-				src1 = registers[rs];
-
-			// get src2
-			if (test(Mips.SRC2IMM))
-				src2 = imm;
-			else
-				src2 = registers[rt];
-
-			if (test(Mips.UNSIGNED)) {
-				src1 &= 0xFFFFFFFFL;
-				src2 &= 0xFFFFFFFFL;
-			}
-
-			if (Lib.test(dbgDisassemble) || Lib.test(dbgFullDisassemble))
-				EmulatorHelpers.print(this);
-		}
-
-		private void execute() throws MipsException {
-			int value;
-			int preserved;
-
-			switch (operation) {
-			case Mips.ADD:
-				dst = src1 + src2;
-				break;
-			case Mips.SUB:
-				dst = src1 - src2;
-				break;
-			case Mips.MULT:
-				dst = src1 * src2;
-				registers[regLo] = (int) Lib.extract(dst, 0, 32);
-				registers[regHi] = (int) Lib.extract(dst, 32, 32);
-				break;
-			case Mips.DIV:
-				try {
-					registers[regLo] = (int) (src1 / src2);
-					registers[regHi] = (int) (src1 % src2);
-					if (registers[regLo] * src2 + registers[regHi] != src1)
-						throw new ArithmeticException();
-				} catch (ArithmeticException e) {
-					throw new MipsException(this, memory, MipsException.exceptionOverflow);
-				}
-				break;
-
-			case Mips.SLL:
-				dst = src2 << (src1 & 0x1F);
-				break;
-			case Mips.SRA:
-				dst = src2 >> (src1 & 0x1F);
-				break;
-			case Mips.SRL:
-				dst = src2 >>> (src1 & 0x1F);
-				break;
+		case Mips.SLL:
+			dst = src2 << (src1 & 0x1F);
+			break;
+		case Mips.SRA:
+			dst = src2 >> (src1 & 0x1F);
+			break;
+		case Mips.SRL:
+			dst = src2 >>> (src1 & 0x1F);
+			break;
 
 			case Mips.SLT:
 				dst = (src1 < src2) ? 1 : 0;
@@ -426,23 +424,23 @@ public final class Processor {
 
 				break;
 
-			case Mips.STORE:
-				memory.writeMem(addr, size, (int) src2);
-				break;
+				case Mips.STORE:
+					memory.writeMem(addr, size, (int) src2);
+					break;
 
-			case Mips.SWL:
-				value = memory.readMem(addr & ~0x3, 4);
+				case Mips.SWL:
+					value = memory.readMem(addr & ~0x3, 4);
 
-				// SWL shifts highest order byte into the addressed position
-				preserved = (3 - (addr & 0x3)) * 8;
-				mask = -1 >>> preserved;
-				dst = src2 >>> preserved;
+					// SWL shifts highest order byte into the addressed position
+					preserved = (3 - (addr & 0x3)) * 8;
+					mask = -1 >>> preserved;
+					dst = src2 >>> preserved;
 
-				// merge values
-				dst = (dst & mask) | (value & ~mask);
+					// merge values
+					dst = (dst & mask) | (value & ~mask);
 
-				memory.writeMem(addr & ~0x3, 4, (int) dst);
-				break;
+					memory.writeMem(addr & ~0x3, 4, (int) dst);
+					break;
 
 			case Mips.SWR:
 				value = memory.readMem(addr & ~0x3, 4);
@@ -466,53 +464,51 @@ public final class Processor {
 
 			default:
 				Lib.assertNotReached();
+		}
+		
+
+	}
+
+	private void writeBack() throws MipsException {
+		// if instruction is signed, but carry bit !+ sign bit, throw
+		if (test(Mips.OVERFLOW) && Lib.test(dst, 31) != Lib.test(dst, 32))
+			throw new MipsException(this, memory, MipsException.exceptionOverflow);
+
+		if (test(Mips.DELAYEDLOAD))
+			memory.delayedLoad(dstReg, (int) dst, mask);
+		else
+			memory.finishLoad();
+
+		if (test(Mips.LINK))
+			dst = nextPC;
+
+		if (test(Mips.DST) && dstReg != 0)
+			registers[dstReg] = (int) dst;
+
+		if ((test(Mips.DST) || test(Mips.DELAYEDLOAD)) && dstReg != 0) {
+			if (Lib.test(dbgFullDisassemble)) {
+				System.out.print("#0x" + Lib.toHexString((int) dst));
+				if (test(Mips.DELAYEDLOAD))
+					System.out.print(" (delayed load)");
 			}
 		}
 
-		private void writeBack() throws MipsException {
-			// if instruction is signed, but carry bit !+ sign bit, throw
-			if (test(Mips.OVERFLOW) && Lib.test(dst, 31) != Lib.test(dst, 32))
-				throw new MipsException(this, memory, MipsException.exceptionOverflow);
-
-			if (test(Mips.DELAYEDLOAD))
-				memory.delayedLoad(dstReg, (int) dst, mask);
-			else
-				memory.finishLoad();
-
-			if (test(Mips.LINK))
-				dst = nextPC;
-
-			if (test(Mips.DST) && dstReg != 0)
-				registers[dstReg] = (int) dst;
-
-			if ((test(Mips.DST) || test(Mips.DELAYEDLOAD)) && dstReg != 0) {
-				if (Lib.test(dbgFullDisassemble)) {
-					System.out.print("#0x" + Lib.toHexString((int) dst));
-					if (test(Mips.DELAYEDLOAD))
-						System.out.print(" (delayed load)");
-				}
-			}
-
-			if (test(Mips.BRANCH) && branch) {
-				nextPC = jtarget;
-			}
-
-			advancePC(nextPC);
-
-			if ((Lib.test(dbgDisassemble) && !Lib.test(dbgProcessor))
-					|| Lib.test(dbgFullDisassemble))
-				System.out.print("\n");
+		if (test(Mips.BRANCH) && branch) {
+			nextPC = jtarget;
 		}
 
-		// state used to execute a single instruction
-		int value, op, rs, rt, rd, sh, func, target, imm;
-		int operation, format, flags;
-		String name;
+		advancePC(nextPC);
+	}
 
-		int size;
-		int addr, nextPC, jtarget, dstReg;
-		long src1, src2, dst;
-		int mask;
-		boolean branch;
+	// state used to execute a single instruction
+	int value, op, rs, rt, rd, sh, func, target, imm;
+	int operation, format, flags;
+	String name;
+
+	int size;
+	int addr, nextPC, jtarget, dstReg;
+	long src1, src2, dst;
+	int mask;
+	boolean branch;
 
 }

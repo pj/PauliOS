@@ -1,9 +1,12 @@
 package kernel;
 
 import hardware.IOOperation;
+import machine.Configuration;
 import machine.Machine;
-import machine.TranslationEntry;
+import machine.Page;
 import emulator.Processor;
+import filesystem.FileTableEntry;
+import filesystem.OpenFile;
 
 public class PCB {
 	
@@ -11,7 +14,7 @@ public class PCB {
 	public static final int waiting = 1;
 	public static final int running = 2;
 	
-	public TranslationEntry[] pageTable;
+	public Page[] pageTable;
 	
 	public int userRegisters[] = new int[Processor.numUserRegisters];
 	
@@ -26,7 +29,14 @@ public class PCB {
 	
 	public int parent;
 	
-	public int joining;
+	// pid of child we are joining
+	public int joining = -1;
+	
+	// pointer where to put status of exited child process
+	public int statusPointer = 0;
+	
+	// number of ticks this process has been on the processor
+	public int ticks;
 	
 	/**
 	 * This processes IO Operation
@@ -40,6 +50,7 @@ public class PCB {
 	}
 
 
-
+	// files
+	public OpenFile[] files = new OpenFile[Configuration.maxFiles];
 
 }

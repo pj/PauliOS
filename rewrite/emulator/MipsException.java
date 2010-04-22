@@ -31,9 +31,9 @@ public class MipsException extends Exception {
 	private Memory memory;
 	
 	public MipsException(Processor processor, Memory memory, int cause) {
-		Lib.assert_(cause >= 0 && cause < exceptionNames.length);
-
 		this.cause = cause;
+		this.processor = processor;
+		this.memory = memory;
 	}
 
 	public MipsException(Processor processor, Memory memory, int cause, int badVAddr) {
@@ -44,10 +44,10 @@ public class MipsException extends Exception {
 	}
 
 	public void handle() {
-		processor.writeRegister(processor.regCause, cause);
+		processor.writeRegister(Processor.regCause, cause);
 
 		if (hasBadVAddr)
-			processor.writeRegister(processor.regBadVAddr, badVAddr);
+			processor.writeRegister(Processor.regBadVAddr, badVAddr);
 
 		memory.finishLoad();
 

@@ -1,8 +1,8 @@
 package emulator;
 
-import machine.Config;
+import machine.Configuration;
 import machine.Lib;
-import machine.TranslationEntry;
+import machine.Page;
 
 public class Memory {
 	/** The registered target of the delayed load currently in progress. */
@@ -12,67 +12,25 @@ public class Memory {
 	/** The value to be loaded by the delayed load currently in progress. */
 	private int loadValue;
 
-	/** <tt>true</tt> if using a software-managed TLB. */
-	private boolean usingTLB;
-	/** Number of TLB entries. */
-	private int tlbSize = 4;
 	/**
 	 * Either an associative or direct-mapped set of translation entries,
 	 * depending on whether there is a TLB.
 	 */
-	private TranslationEntry[] translations;
+	public Page[] pages;
 
-	/** Size of a page, in bytes. */
-	public static final int pageSize = 0x400;
-	/** Number of pages in a 32-bit address space. */
-	private static final int maxPages = (int) (0x100000000L / pageSize);
-	/** Number of physical pages in memory. */
-	private int numPhysPages;
 	/** Main memory for user programs. */
 	public byte[] mainMemory;
 	
-	private Processor processor;
+	public Processor processor;
 	
-	public Memory(Processor processor, int numPhysPages) {
-		this.processor = processor;
-		
-		usingTLB = Config.getBoolean("Processor.usingTLB");
-
-		this.numPhysPages = numPhysPages;
-
-		mainMemory = new byte[pageSize * numPhysPages];
-
-		if (usingTLB) {
-			translations = new TranslationEntry[tlbSize];
-			for (int i = 0; i < tlbSize; i++)
-				translations[i] = new TranslationEntry();
-		} else {
-			translations = null;
-		}
-	}
+	/** Virtual memory disabled or enabled */
+	public boolean vmEnabled = false;
 	
-	
-	/**
-	 * Test whether this processor uses a software-managed TLB, or single-level
-	 * paging.
-	 * 
-	 * <p>
-	 * If <tt>false</tt>, this processor directly supports single-level paging;
-	 * use <tt>setPageTable()</tt>.
-	 * 
-	 * <p>
-	 * If <tt>true</tt>, this processor has a software-managed TLB; use
-	 * <tt>getTLBSize()</tt>, <tt>readTLBEntry()</tt>, and
-	 * <tt>writeTLBEntry()</tt>.
-	 * 
-	 * <p>
-	 * Using a method associated with the wrong address translation mechanism
-	 * will result in an assertion failure.
-	 * 
-	 * @return <tt>true</tt> if this processor has a software-managed TLB.
-	 */
-	public boolean hasTLB() {
-		return usingTLB;
+	public Memory(int numPhysPages) {
+		Configuration.numPhysPages = numPhysPages;
+
+		mainMemory = new byte[Configuration.pageSize * numPhysPages];
+
 	}
 
 	/**
@@ -83,46 +41,10 @@ public class Memory {
 	 * @param pageTable
 	 *            the page table to use.
 	 */
-	public void setPageTable(TranslationEntry[] pageTable) {
-		this.translations = pageTable;
+	public void setPageTable(Page[] pageTable) {
+		this.pages = pageTable;
 	}
-
-	/**
-	 * Return the number of entries in this processor's TLB.
-	 * 
-	 * @return the number of entries in this processor's TLB.
-	 */
-	public int getTLBSize() {
-		return tlbSize;
-	}
-
-	/**
-	 * Returns the specified TLB entry.
-	 * 
-	 * @param number
-	 *            the index into the TLB.
-	 * @return the contents of the specified TLB entry.
-	 */
-	public TranslationEntry readTLBEntry(int number) {
-		return new TranslationEntry(translations[number]);
-	}
-
-	/**
-	 * Fill the specified TLB entry.
-	 * 
-	 * <p>
-	 * The TLB is fully associative, so the location of an entry within the TLB
-	 * does not affect anything.
-	 * 
-	 * @param number
-	 *            the index into the TLB.
-	 * @param entry
-	 *            the new contents of the TLB entry.
-	 */
-	public void writeTLBEntry(int number, TranslationEntry entry) {
-		translations[number] = new TranslationEntry(entry);
-	}
-
+	
 	/**
 	 * Return the number of pages of physical memory attached to this simulated
 	 * processor.
@@ -130,7 +52,7 @@ public class Memory {
 	 * @return the number of pages of physical memory.
 	 */
 	public int getNumPhysPages() {
-		return numPhysPages;
+		return Configuration.numPhysPages;
 	}
 
 	/**
@@ -155,7 +77,7 @@ public class Memory {
 	 * @return a 32-bit address consisting of the specified page and offset.
 	 */
 	public static int makeAddress(int page, int offset) {
-		return (page * pageSize) | offset;
+		return (page * Configuration.pageSize) | offset;
 	}
 
 	/**
@@ -166,7 +88,7 @@ public class Memory {
 	 * @return the page number component of the address.
 	 */
 	public static int pageFromAddress(int address) {
-		return (int) (((long) address & 0xFFFFFFFFL) / pageSize);
+		return (int) (((long) address & 0xFFFFFFFFL) / Configuration.pageSize);
 	}
 
 	/**
@@ -177,7 +99,7 @@ public class Memory {
 	 * @return the offset component of the address.
 	 */
 	public static int offsetFromAddress(int address) {
-		return (int) (((long) address & 0xFFFFFFFFL) % pageSize);
+		return (int) (((long) address & 0xFFFFFFFFL) % Configuration.pageSize);
 	}
 
 	void finishLoad() {
@@ -200,60 +122,54 @@ public class Memory {
 	 * @exception MipsException
 	 *                if a translation error occurred.
 	 */
-	private int translate(int vaddr, int size, boolean writing)
-			throws MipsException {
+	private int newTranslate(int vaddr, int size, boolean writing) throws MipsException {		
 		// check alignment
 		if ((vaddr & (size - 1)) != 0) {
 			throw new MipsException(processor, this, MipsException.exceptionAddressError, vaddr);
 		}
-
-		// calculate virtual page number and offset from the virtual address
-		int vpn = pageFromAddress(vaddr);
-		int offset = offsetFromAddress(vaddr);
-
-		TranslationEntry entry = null;
-
-		// if not using a TLB, then the vpn is an index into the table
-		if (!usingTLB) {
-			if (vpn >= translations.length || translations[vpn] == null
-					|| !translations[vpn].valid) {
+		
+		// is virtual memory enabled?
+		if(vmEnabled){
+			// calculate virtual page number and offset from the virtual address
+			int vpn = pageFromAddress(vaddr);
+			int offset = offsetFromAddress(vaddr);
+			
+			Page entry = pages[vpn];
+			
+			//System.out.println("vpn " + vpn);
+			
+			if(entry == null || !entry.present){
 				throw new MipsException(processor, this, MipsException.exceptionPageFault, vaddr);
 			}
-
-			entry = translations[vpn];
-		}
-		// else, look through all TLB entries for matching vpn
-		else {
-			for (int i = 0; i < tlbSize; i++) {
-				if (translations[i].valid && translations[i].vpn == vpn) {
-					entry = translations[i];
-					break;
-				}
+	
+			// check if trying to write a read-only page
+			if (entry.readOnly && writing) {
+				throw new MipsException(processor, this, MipsException.exceptionReadOnly, vaddr);
 			}
-			if (entry == null) {
-				throw new MipsException(processor, this, MipsException.exceptionTLBMiss, vaddr);
+	
+			// check if physical page number is out of range
+			int ppn = entry.ppn;
+			if (ppn < 0 || ppn >= Configuration.numPhysPages) {
+				throw new MipsException(processor, this, MipsException.exceptionBusError, vaddr);
 			}
+	
+			// set used and dirty bits as appropriate
+			entry.used = true;
+			if (writing)
+				entry.dirty = true;
+	
+			int paddr = (ppn * Configuration.pageSize) + offset;
+	
+			return paddr;
+		}else{
+			int ppn = pageFromAddress(vaddr);
+			
+			if (ppn < 0 || ppn >= Configuration.numPhysPages) {
+				throw new MipsException(processor, this, MipsException.exceptionBusError, vaddr);
+			}
+			
+			return vaddr;
 		}
-
-		// check if trying to write a read-only page
-		if (entry.readOnly && writing) {
-			throw new MipsException(processor, this, MipsException.exceptionReadOnly, vaddr);
-		}
-
-		// check if physical page number is out of range
-		int ppn = entry.ppn;
-		if (ppn < 0 || ppn >= numPhysPages) {
-			throw new MipsException(processor, this, MipsException.exceptionBusError, vaddr);
-		}
-
-		// set used and dirty bits as appropriate
-		entry.used = true;
-		if (writing)
-			entry.dirty = true;
-
-		int paddr = (ppn * pageSize) + offset;
-
-		return paddr;
 	}
 
 	/**
@@ -268,8 +184,8 @@ public class Memory {
 	 * @exception MipsException
 	 *                if a translation error occurred.
 	 */
-	int readMem(int vaddr, int size) throws MipsException {
-		int value = Lib.bytesToInt(mainMemory, translate(vaddr, size, false), size);
+	public int readMem(int vaddr, int size) throws MipsException {
+		int value = Lib.bytesToInt(mainMemory, newTranslate(vaddr, size, false), size);
 
 		return value;
 	}
@@ -287,8 +203,8 @@ public class Memory {
 	 * @exception MipsException
 	 *                if a translation error occurred.
 	 */
-	void writeMem(int vaddr, int size, int value) throws MipsException {
-		Lib.bytesFromInt(mainMemory, translate(vaddr, size, true), size, value);
+	public void writeMem(int vaddr, int size, int value) throws MipsException {
+		Lib.bytesFromInt(mainMemory, newTranslate(vaddr, size, true), size, value);
 	}
 
 	/**
