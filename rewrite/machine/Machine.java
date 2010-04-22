@@ -1,300 +1,186 @@
-// PART OF THE MACHINE SIMULATION. DO NOT CHANGE.
-
 package machine;
 
+import hardware.HardDrive;
+import hardware.IOOperation;
 import hardware.Interrupt;
 import hardware.Timer;
 
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
-
-import coff.CoffLoadException;
-import coff.CoffLoader;
-import coff.CoffStartData;
 
 import kernel.Kernel;
 
 import emulator.Memory;
+import emulator.MipsException;
 import emulator.Processor;
 
-/**
- * The master class of the simulated machine. Processes command line arguments,
- * constructs all simulated hardware devices, and starts the grader.
- */
-public final class Machine {
-	/**
-	 * Nachos main entry point.
-	 * 
-	 * @param args
-	 *            the command line arguments.
-	 */
-	public static void main(final String[] args) {
-		System.out.print("nachos 5.0j initializing...");
+public class Machine {
+	/** System Kernel */
+	Kernel kernel;
 
-		Lib.assert_(Machine.args == null);
-		Machine.args = args;
+	/** The piece of io hardware that is currently interrupting */
+	public Interrupt interrupting;
 
-		// get the current directory (.)
+	/** queue of pieces of io hardware that are interrupting and waiting to be handled */
+	private PriorityBlockingQueue<Interrupt> interrupts;
+
+	private Processor processor = null;
+	private Memory memory = null;
+
+	/** System timer - triggers context switches */
+	public Timer timer = null;
+	/** Hard drive */
+	public HardDrive hd = null;
+
+	private long randomSeed = 0;
+
+	public File baseDirectory, nachosDirectory, testDirectory;
+	private String configFileName = "nachos.conf";
+
+	public PriorityBlockingQueue<Interrupt> getInterrupts() {
+		return interrupts;
+	}
+
+	public Processor processor() {
+		return processor;
+	}
+
+	public Memory memory() {
+		return memory;
+	}
+
+	public static void main(final String[] args) throws IOException {
+		new Machine().initialize(args);
+	}
+
+	public void initialize(String[] args) throws IOException {
 		baseDirectory = new File(new File("").getAbsolutePath());
 		// get the nachos directory (./nachos)
 		nachosDirectory = new File(baseDirectory, "nachos");
 		// get the test directory (../test)
 		testDirectory = new File(baseDirectory.getParentFile(), "test");
 
-		processArgs();
+		processArgs(args);
 
-		Config.load(configFileName);
-
+		Configuration.processArgs = args;
+		
 		createDevices();
+
+		// start hard drive device
+		new Thread(hd, "Hard Drive thread").start();
 		
-		// create kernel
-		kernel = new Kernel();
+		// load first block of hard drive
+		IOOperation ioop = new IOOperation();
+		ioop.action = HardDrive.read;
+		ioop.position = 0;
+		ioop.length = Configuration.bootBlockLength;
 		
-		// load core os here
-		CoffLoader loader = new CoffLoader();
-		
-		FileInputStream fis;
+		hd.operations.add(ioop);
 		try {
-			fis = new FileInputStream(new File(Config.getString("Machine.coreos")));
+			// wait for the hard drive to complete
+			interrupts.take().acknowledge();
 			
-			CoffStartData csd = loader.load(fis, args, kernel.pageTable);
+			// ioop will now contain the data from the first block so write it to memory
+			for(int i = 0; i < 1024; i++){
+				byte b = ioop.rdata[i];
+				memory.writeMem(i, 1, b);
+			}
 			
-			memory.setPageTable(kernel.pageTable);
+			// create kernel and set it to catch interrupts from the processor
+			kernel = new Kernel(this);
 			
-			// by default, everything's 0
-			for (int i = 0; i < processor.numUserRegisters; i++)
-				processor.writeRegister(i, 0);
-
-			// initialize PC and SP according
-			processor.writeRegister(Processor.regPC, csd.initialPC);
-			processor.writeRegister(Processor.regSP, csd.initialSP);
-
-			// initialize the first two argument registers to argc and argv
-			processor.writeRegister(Processor.regA0, csd.argc);
-			processor.writeRegister(Processor.regA1, csd.argv);
+			processor.setExceptionHandler(kernel);
 			
-			// start processor in core os
+			// start processor emulating
 			processor.emulate();
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (CoffLoadException e) {
-			// TODO Auto-generated catch block
+		} catch (InterruptedException e1) {
+			e1.printStackTrace();
+		} catch (MipsException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public void createDevices() throws FileNotFoundException {
+		interrupts = new PriorityBlockingQueue<Interrupt>();
+
+		memory = new Memory(Configuration.numPhysPages);
+
+		processor = new Processor(this);
+
+		memory.processor = processor;
+
+		processor.memory = memory;
+
+		// create timer
+		timer = new Timer(Configuration.switchTime);
+		timer.setQueue(interrupts);
+		
+		// create hardisk
+		hd = new HardDrive();
+		hd.operations = new LinkedBlockingQueue<IOOperation>();
+		hd.setQueue(interrupts);
 		
 	}
-
-	static Kernel kernel;
-
-	/**
-	 * Terminate Nachos. Same as <tt>TCB.die()</tt>.
-	 */
-	public static void terminate() {
-		System.exit(0);
-	}
-
-	/**
-	 * Terminate Nachos as the result of an unhandled exception or error.
-	 * 
-	 * @param e
-	 *            the exception or error.
-	 */
-	public static void terminate(Throwable e) {
-		if (e instanceof ThreadDeath)
-			throw (ThreadDeath) e;
-
-		e.printStackTrace();
-		terminate();
+	
+	public void startHardware(){
+		new Thread(hd).start();
+		new Thread(timer).start();
 	}
 
 	/**
 	 * Print stats, and terminate Nachos.
 	 */
-	public static void halt() {
+	public void halt() {
 		System.out.print("Machine halting!\n\n");
-		terminate();
+		System.exit(0);
 	}
-
-	private static void processArgs() {
+	
+	private void processArgs(String[] args) {
 		for (int i = 0; i < args.length;) {
 			String arg = args[i++];
 			if (arg.length() > 0 && arg.charAt(0) == '-') {
-				if (arg.equals("-d")) {
-					Lib.assert_(i < args.length);
-					Lib.enableDebugFlags(args[i++]);
-				} else if (arg.equals("-h")) {
-					System.out.print(help);
-					System.exit(1);
-				} else if (arg.equals("-s")) {
-					Lib.assert_(i < args.length);
-					try {
-						randomSeed = Long.parseLong(args[i++]);
-					} catch (NumberFormatException e) {
-						Lib.assertNotReached();
-					}
-				} else if (arg.equals("-x")) {
-					Lib.assert_(i < args.length);
-					shellProgramName = args[i++];
+				if (arg.equals("-h")) {
+					printFile("../help.txt");
+					System.exit(0);
 				} else if (arg.equals("-z")) {
-					System.out.print(copyright);
-					System.exit(1);
-				}
-				// these switches are reserved for the autograder
-				else if (arg.equals("-[]")) {
-					Lib.assert_(i < args.length);
-					configFileName = args[i++];
-				} else if (arg.equals("--")) {
-					Lib.assert_(i < args.length);
+					printFile("../copyright.txt");
+					System.exit(0);
 				}
 			}
 		}
+		
+		Configuration.processArgs = args;
 
 		Lib.seedRandom(randomSeed);
 	}
-	
-	private static PriorityBlockingQueue<Interrupt> interrupts;
-	
-	public static PriorityBlockingQueue<Interrupt> getInterrupts() {
-		return interrupts;
-	}
-	
-	public static Interrupt interrupting;
 
-	private static void createDevices() {
-		int numPhysPages = Config.getInteger("Processor.numPhysPages");
-		memory = new Memory(processor, numPhysPages);
+	private void printFile(String name) {
+		try {
+			File hFile = new File(name);
+			
+			BufferedReader hFR;
+			
+			hFR = new BufferedReader(new FileReader(hFile));
+			
+			String line;
+			
+			while((line = hFR.readLine()) != null){
+				System.out.println(line);
+			}
+		} catch (FileNotFoundException e) {
+			System.out.println(name + " not found");
+			System.exit(0);
+		} catch (IOException e) {
+			System.exit(0);
+		}
 		
-		processor = new Processor(memory);
-		
-		// create timer
-		timer = new Timer(Config.getInteger("Machine.switch_time"));
+
 	}
 
-
-	/**
-	 * Prevent instantiation.
-	 */
-	private Machine() {
-	}
-
-	/**
-	 * Return the MIPS processor.
-	 * 
-	 * @return the MIPS processor, or <tt>null</tt> if it is not present.
-	 */
-	public static Processor processor() {
-		return processor;
-	}
-	
-	/**
-	 * Return the MIPS processor.
-	 * 
-	 * @return the MIPS processor, or <tt>null</tt> if it is not present.
-	 */
-	public static Memory memory() {
-		return memory;
-	}
-
-	private static Processor processor = null;
-	private static Memory memory = null;
-	private static Timer timer = null;
-	
-	/**
-	 * Return the name of the shell program that a user-programming kernel must
-	 * run. Make sure <tt>UserKernel.run()</tt> <i>always</i> uses this method
-	 * to decide which program to run.
-	 * 
-	 * @return the name of the shell program to run.
-	 */
-	public static String getShellProgramName() {
-		if (shellProgramName == null)
-			shellProgramName = Config.getString("Kernel.shellProgram");
-
-		Lib.assert_(shellProgramName != null);
-		return shellProgramName;
-	}
-
-	private static String shellProgramName = null;
-
-	/**
-	 * Return the name of the process class that the kernel should use. In the
-	 * multi-programming project, returns <tt>nachos.userprog.UserProcess</tt>.
-	 * In the VM project, returns <tt>nachos.vm.VMProcess</tt>. In the
-	 * networking project, returns <tt>nachos.network.NetProcess</tt>.
-	 * 
-	 * @return the name of the process class that the kernel should use.
-	 * 
-	 * @see nachos.userprog.UserKernel#run
-	 * @see nachos.userprog.UserProcess
-	 * @see nachos.vm.VMProcess
-	 * @see nachos.network.NetProcess
-	 */
-	public static String getProcessClassName() {
-		if (processClassName == null)
-			processClassName = Config.getString("Kernel.processClassName");
-
-		Lib.assert_(processClassName != null);
-		return processClassName;
-	}
-
-	private static String coreOS;
-	
-	private static String processClassName = null;
-	
-	private static String[] args = null;
-
-	private static long randomSeed = 0;
-
-	private static File baseDirectory, nachosDirectory, testDirectory;
-	private static String configFileName = "nachos.conf";
-
-	private static final String help = "\n"
-			+ "Options:\n"
-			+ "\n"
-			+ "\t-d <debug flags>\n"
-			+ "\t\tEnable some debug flags, e.g. -d ti\n"
-			+ "\n"
-			+ "\t-h\n"
-			+ "\t\tPrint this help message.\n"
-			+ "\n"
-			+ "\t-s <seed>\n"
-			+ "\t\tSpecify the seed for the random number generator (seed is a\n"
-			+ "\t\tlong).\n" + "\n" + "\t-x <program>\n"
-			+ "\t\tSpecify a program that UserKernel.run() should execute,\n"
-			+ "\t\tinstead of the value of the configuration variable\n"
-			+ "\t\tKernel.shellProgram\n" + "\n" + "\t-z\n"
-			+ "\t\tprint the copyright message\n" + "\n"
-			+ "\t-- <grader class>\n"
-			+ "\t\tSpecify an autograder class to use, instead of\n"
-			+ "\t\tnachos.ag.AutoGrader\n" + "\n" + "\t-# <grader arguments>\n"
-			+ "\t\tSpecify the argument string to pass to the autograder.\n"
-			+ "\n" + "\t-[] <config file>\n"
-			+ "\t\tSpecifiy a config file to use, instead of nachos.conf\n"
-			+ "";
-
-	private static final String copyright = "\n"
-			+ "Copyright 1992-2001 The Regents of the University of California.\n"
-			+ "All rights reserved.\n"
-			+ "\n"
-			+ "Permission to use, copy, modify, and distribute this software and\n"
-			+ "its documentation for any purpose, without fee, and without\n"
-			+ "written agreement is hereby granted, provided that the above\n"
-			+ "copyright notice and the following two paragraphs appear in all\n"
-			+ "copies of this software.\n"
-			+ "\n"
-			+ "IN NO EVENT SHALL THE UNIVERSITY OF CALIFORNIA BE LIABLE TO ANY\n"
-			+ "PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL\n"
-			+ "DAMAGES ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS\n"
-			+ "DOCUMENTATION, EVEN IF THE UNIVERSITY OF CALIFORNIA HAS BEEN\n"
-			+ "ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n"
-			+ "\n"
-			+ "THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY\n"
-			+ "WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES\n"
-			+ "OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.  THE\n"
-			+ "SOFTWARE PROVIDED HEREUNDER IS ON AN \"AS IS\" BASIS, AND THE\n"
-			+ "UNIVERSITY OF CALIFORNIA HAS NO OBLIGATION TO PROVIDE\n"
-			+ "MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.\n";
 }
+

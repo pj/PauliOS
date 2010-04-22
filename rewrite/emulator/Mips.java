@@ -16,7 +16,7 @@ public class Mips {
 	}
 
 	int operation = INVALID;
-	String name = "invalid ";
+	public String name = "invalid ";
 	int format;
 	int flags;
 
@@ -82,7 +82,7 @@ public class Mips {
 			new Mips(UNIMPL, "sc "), new Mips(), new Mips(), new Mips(),
 			new Mips(), new Mips(), new Mips(), new Mips(), };
 
-	static final Mips[] specialtable = {
+	public static final Mips[] specialtable = {
 			new Mips(SLL, "sll dth", RFMT, DST | SRC1SH), new Mips(),
 			new Mips(SRL, "srl dth", RFMT, DST | SRC1SH),
 			new Mips(SRA, "sra dth", RFMT, DST | SRC1SH),

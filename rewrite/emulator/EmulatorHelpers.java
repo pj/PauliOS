@@ -125,9 +125,7 @@ public class EmulatorHelpers {
 				}
 			}
 		}
-
-		if (Lib.test(processor.dbgDisassemble) && Lib.test(processor.dbgProcessor)
-				&& !Lib.test(processor.dbgFullDisassemble))
-			System.out.print("\n");
+		
+		System.out.print("\n");
 	}
 }

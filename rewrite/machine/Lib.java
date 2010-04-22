@@ -9,9 +9,6 @@ import java.lang.reflect.Modifier;
 import java.security.PrivilegedAction;
 import java.util.Random;
 
-import nachos.machine.ArrayFile;
-import nachos.machine.Machine;
-
 /**
  * Thrown when an assertion fails.
  */
@@ -501,7 +498,8 @@ public final class Lib {
 		try {
 			return ClassLoader.getSystemClassLoader().loadClass(className);
 		} catch (Throwable e) {
-			Machine.terminate(e);
+			e.printStackTrace();
+			System.exit(0);
 			return null;
 		}
 	}
@@ -518,7 +516,8 @@ public final class Lib {
 		try {
 			return loadClass(className).newInstance();
 		} catch (Throwable e) {
-			Machine.terminate(e);
+			e.printStackTrace();
+			System.exit(0);
 			return null;
 		}
 	}

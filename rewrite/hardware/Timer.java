@@ -14,7 +14,6 @@ public class Timer extends Interrupt {
 			try {
 				Thread.currentThread().sleep(sleepTime);
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			

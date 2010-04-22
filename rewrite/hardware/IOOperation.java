@@ -7,17 +7,16 @@ import kernel.PCB;
 public class IOOperation {
 	public int action;
 	
-	public int process;
-	
-	public String name;
-	
-	public File file;
-	
 	public int pointer;
 	
 	public int length;
 	
 	public int rval;
 	
+	// data to read/write
 	public byte[] rdata;
+	
+	
+	// file system stuff
+	public int position;
 }
