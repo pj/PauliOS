@@ -68,3 +68,4 @@ name:				; \
 	SYSCALLSTUB(connect, syscallConnect)
 	SYSCALLSTUB(accept, syscallAccept)
 	SYSCALLSTUB(initialize, syscallInitialize)
+	SYSCALLSTUB(more_memory, syscallMoreMemory)

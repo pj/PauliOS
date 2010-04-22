@@ -24,6 +24,7 @@
 #define syscallConnect		11
 #define syscallAccept		12
 #define syscallInitialize	13
+#define syscallMoreMemory	14
 
 /* Don't want the assembler to see C code, but start.s includes syscall.h. */
 #ifndef START_S
@@ -242,10 +243,15 @@ int connect(int host, int port);
 int accept(int port);
 
 /**
-* initialize kernelquit
+* initialize kernel
 
 */
 int initialize();
+
+/**
+* get a page of memory from the OS to use
+*/
+int more_memory();
 
 #endif /* START_S */
 
