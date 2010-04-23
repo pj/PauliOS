@@ -123,14 +123,31 @@ public class Kernel implements Runnable{
 			for (int i = 0; i < Processor.numUserRegisters; i++){
 				process.userRegisters[i] = machine.processor().readRegister(i);
 			}
-		}
 			
+			// save dirty pages to page table
+			for(int i = 0; i < process.pageTable.length; i++){
+				Page entry = process.pageTable[i];
+				
+				if(entry != null && entry.present && entry.dirty){
+					for(int j = 0; j < Configuration.pageSize; j++){
+						try {
+							entry.data[j] = (byte)machine.memory().readMem(Memory.makeAddress(entry.vpn, j), 1);
+						} catch (MipsException e) {
+						}
+					}
+				}
+			}
+		}
+		
 		// restore next process
 		for (int i = 0; i < Processor.numUserRegisters; i++){
 			machine.processor().writeRegister(i, nextProcess.userRegisters[i]);
 		}
 		
+
+		
 		machine.memory().setPageTable(nextProcess.pageTable);
+		
 		
 		process = nextProcess;
 		
