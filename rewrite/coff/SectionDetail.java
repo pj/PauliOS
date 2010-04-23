@@ -1,5 +1,11 @@
 package coff;
 
+/**
+ * Holds details about a coff section for loading into memory.
+ * 
+ * @author pauljohnson
+ *
+ */
 public class SectionDetail {
 	public String name;
 	public int vaddr;

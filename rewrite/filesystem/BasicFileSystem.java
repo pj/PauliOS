@@ -24,10 +24,6 @@ public class BasicFileSystem implements FileSystem{
 	public static final int non_existant = -1;
 	
 	/**
-	 * Constants for file system
-	 */
-	
-	/**
 	 * File allocation table notes where the next block of the file is
 	 */
 	public int[] fat;
@@ -39,6 +35,9 @@ public class BasicFileSystem implements FileSystem{
 
 	private Machine machine;
 
+	/**
+	 * Loads the file system from the hard drive and creates the necessary data structures to support file system operation.
+	 */
 	public void initialize(Machine machine){
 		this.machine = machine;
 		
@@ -79,6 +78,12 @@ public class BasicFileSystem implements FileSystem{
 		}
 	}
 	
+	/**
+	 * Checks whether the file named name exists on the file system.
+	 * 
+	 * @param name
+	 * @return
+	 */
 	FileTableEntry exists(String name){
 		for(int i = 0; i < Configuration.maxFiles; i++){
 			FileTableEntry entry = files[i];
@@ -94,6 +99,12 @@ public class BasicFileSystem implements FileSystem{
 		return null;
 	}
 	
+	/**
+	 * Gets the first available slot in a processes files.
+	 * 
+	 * @param files2
+	 * @return
+	 */
 	public int getFid(OpenFile[] files2){
 		for(int i = 2; i < Configuration.maxFiles; i++){
 			if(files2[i] == null){
@@ -104,6 +115,9 @@ public class BasicFileSystem implements FileSystem{
 		return -1;
 	}
 	
+	/**
+	 * Open a file into the process 
+	 */
 	public int open(String name, PCB process){
 		FileTableEntry entry = exists(name);
 		
@@ -285,6 +299,10 @@ public class BasicFileSystem implements FileSystem{
 		return firstBlock;
 	}
 	
+	/**
+	 * Write from a buffer in memory to disk.
+	 * 
+	 */
 	public int write(int fid, int length, int startPointer, Kernel kernel, PCB process) {
 	
 		if(fid > Configuration.maxFiles || fid < 0){
@@ -391,6 +409,9 @@ public class BasicFileSystem implements FileSystem{
 		return read;
 	}
 	
+	/**
+	 * Delete the named file
+	 */
 	public int unlink(String name){
 		FileTableEntry fte = exists(name);
 		
@@ -432,6 +453,9 @@ public class BasicFileSystem implements FileSystem{
 		}
 	}
 	
+	/**
+	 * Set the file position to a new position
+	 */
 	public int seek(int fid, int position, PCB process){
 		OpenFile file = process.files[fid];
 		
@@ -443,6 +467,13 @@ public class BasicFileSystem implements FileSystem{
 		}
 	}
 	
+	/**
+	 * Read from hard drive
+	 * 
+	 * @param position
+	 * @param data
+	 * @return
+	 */
 	private int readDrive(int position, byte[] data){
 		IOOperation operation = new IOOperation();
 		operation.action = HardDrive.read;
@@ -458,6 +489,13 @@ public class BasicFileSystem implements FileSystem{
 		return operation.rval;
 	}
 	
+	/**
+	 * Write to hard drive
+	 * 
+	 * @param position
+	 * @param data
+	 * @return
+	 */
 	private int writeDrive(int position, byte[] data){
 		IOOperation operation = new IOOperation();
 		operation.action = HardDrive.write;
@@ -472,7 +510,8 @@ public class BasicFileSystem implements FileSystem{
 	}
 	
 	/**
-	 * Wait for the HardDrive to respond to our IO request
+	 * Wait for the HardDrive to respond to our IO request.
+	 * 
 	 * @throws InterruptedException
 	 */
 	private void waitForHardDrive(){
@@ -512,6 +551,11 @@ public class BasicFileSystem implements FileSystem{
 		throw new KernelFault("Too many files open");
 	}
 	
+	/**
+	 * find a free hard drive block
+	 * 
+	 * @return
+	 */
 	private int findFreeBlock() {
 		for(int i = 0; i < fat.length; i++){
 			if(fat[i] == -2){

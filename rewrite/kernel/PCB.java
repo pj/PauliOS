@@ -8,6 +8,11 @@ import emulator.Processor;
 import filesystem.FileTableEntry;
 import filesystem.OpenFile;
 
+/**
+ * Process Control Block. Contains information about a process.
+ * @author pauljohnson
+ *
+ */
 public class PCB {
 	
 	public static final int ready = 0;

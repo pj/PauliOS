@@ -9,7 +9,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import machine.Configuration;
 
+
 public class HardDrive extends Interrupt{
+	// hard disk commands
 	public final static int read = 1; // read block of data
 	public final static int write = 2; // write block of data
 	

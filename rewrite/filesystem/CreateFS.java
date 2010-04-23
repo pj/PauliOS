@@ -13,7 +13,7 @@ import machine.Lib;
 public class CreateFS {
 
 	/**
-	 * This is a script to create a filesystem from the .coff files in the test directory
+	 * This is a script to create a filesystem from the files in the files directory
 	 * 
 	 * 
 	 * @param args

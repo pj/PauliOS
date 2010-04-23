@@ -2,6 +2,11 @@ package kernel;
 
 import machine.Configuration;
 
+/**
+ * Basic round robin Scheduler
+ * @author pauljohnson
+ *
+ */
 public class BasicScheduler implements Scheduler {
 
 	private PCB[] processes;

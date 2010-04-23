@@ -1,5 +1,11 @@
 package machine;
 
+/**
+ * Contains constants and configuration for the system.
+ * 
+ * @author pauljohnson
+ *
+ */
 public class Configuration {
 	/** class name for the scheduler */
 	public final static String scheduler = "kernel.BasicScheduler";

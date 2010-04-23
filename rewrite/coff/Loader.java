@@ -9,6 +9,12 @@ import filesystem.FileSystem;
 import kernel.Kernel;
 import kernel.PCB;
 
+/**
+ * Loads a c program file from disk into a processes memory
+ * 
+ * @author pauljohnson
+ *
+ */
 public class Loader {
 
 	// to start the program

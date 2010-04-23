@@ -19,6 +19,12 @@ import emulator.Memory;
 import emulator.MipsException;
 import emulator.Processor;
 
+/**
+ * Represents the "Computer" on which the OS is running.  Includes the hardware, memory and processor.
+ * 
+ * @author pauljohnson
+ *
+ */
 public class Machine {
 	/** System Kernel */
 	Kernel kernel;
@@ -58,6 +64,12 @@ public class Machine {
 		new Machine().initialize(args);
 	}
 
+	/**
+	 * Initializes the system hardware, reads the bootblock from the hard disk, creates the kernel (but doesn't initialize it) and starts the emulator.
+	 * 
+	 * @param args
+	 * @throws IOException
+	 */
 	public void initialize(String[] args) throws IOException {
 		baseDirectory = new File(new File("").getAbsolutePath());
 		// get the nachos directory (./nachos)
@@ -105,6 +117,11 @@ public class Machine {
 		}
 	}
 	
+	/**
+	 * Creates the various bits of hardware that constitute the system.
+	 * 
+	 * @throws FileNotFoundException
+	 */
 	public void createDevices() throws FileNotFoundException {
 		interrupts = new PriorityBlockingQueue<Interrupt>();
 

@@ -2,6 +2,12 @@ package hardware;
 
 import java.util.concurrent.PriorityBlockingQueue;
 
+/**
+ * Abstract class for implementing interrupt driven hard ware.
+ * 
+ * @author pauljohnson
+ *
+ */
 public abstract class Interrupt implements Runnable, Comparable<Interrupt> {
 	public abstract void run();
 

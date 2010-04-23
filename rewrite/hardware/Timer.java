@@ -1,5 +1,11 @@
 package hardware;
 
+/**
+ * Generates interrupts periodically to trigger scheduling of different processes if necessary.
+ * 
+ * @author pauljohnson
+ *
+ */
 public class Timer extends Interrupt {
 
 	private long sleepTime;

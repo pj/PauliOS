@@ -1,5 +1,10 @@
 package kernel;
 
+/**
+ * Error thrown when something unrecoverable happens in the kernel.
+ * @author pauljohnson
+ *
+ */
 public class KernelFault extends RuntimeException {
 	private String message;
 	

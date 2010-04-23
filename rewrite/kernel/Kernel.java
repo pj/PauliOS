@@ -19,6 +19,12 @@ import machine.Page;
 import machine.Machine;
 import static emulator.MipsException.*;
 
+/**
+ * Main class - handles interrupts, system calls, scheduling and memory management.
+ * 
+ * @author pauljohnson
+ *
+ */
 public class Kernel implements Runnable{
 	// list of system processes
 	public PCB[] processes = new PCB[Configuration.maxProcesses];
@@ -95,12 +101,12 @@ public class Kernel implements Runnable{
 	}
 	
 	/**
-	 * Schedules the next process
+	 * Schedules the next process if necessary
 	 * 
 	 */
 	public void schedule(){
 		// do nothing
-		if(process != null && process.ticks < Configuration.quantum){
+		if(process != null && process.ticks < Configuration.quantum && process.state == PCB.ready){
 			return;
 		}
 		
@@ -269,6 +275,10 @@ public class Kernel implements Runnable{
 			throw new KernelFault("Unknown Syscall");
 		}
 	}
+	
+	/**
+	 * Syscall handler methods
+	 */
 
 	private void handleUnlink() {
 		String name = getStringFromMemory(Processor.regA0);
@@ -572,7 +582,7 @@ public class Kernel implements Runnable{
 	}
 
 	/**
-	 * system called by the boot block to initialize the system
+	 * Called by the boot block to initialize the system
 	 */
 	public void initialize(){
 		this.initialized = true;
