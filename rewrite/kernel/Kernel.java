@@ -1,6 +1,8 @@
 package kernel;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import coff.CoffLoadException;
 import coff.Loader;
@@ -87,7 +89,7 @@ public class Kernel implements Runnable{
 		case exceptionInterrupt:
 			interrupt();
 			
-			if(process.ticks > Configuration.quantum){
+			if(process.ticks > process.quantum){
 				//machine.processor().advancePC();
 			}
 			break;
@@ -106,7 +108,7 @@ public class Kernel implements Runnable{
 	 */
 	public void schedule(){
 		// do nothing
-		if(process != null && process.ticks < Configuration.quantum && process.state == PCB.ready){
+		if(process != null && process.ticks < process.quantum && process.state == PCB.ready){
 			return;
 		}
 		
@@ -144,10 +146,7 @@ public class Kernel implements Runnable{
 			machine.processor().writeRegister(i, nextProcess.userRegisters[i]);
 		}
 		
-
-		
 		machine.memory().setPageTable(nextProcess.pageTable);
-		
 		
 		process = nextProcess;
 		
@@ -169,12 +168,16 @@ public class Kernel implements Runnable{
 		
 		if(interrupt instanceof Timer){
 			process.ticks++;
+			
+			decrementIOWaiters();
 		}
 		
 		machine.interrupting = null;
 		interrupt.acknowledge();
 	}
 	
+
+
 	/**
 	 * Handle a page fault
 	 */
@@ -251,6 +254,8 @@ public class Kernel implements Runnable{
 			System.out.println("Syscall Exec");
 			handleExec();
 			
+			simulateIOWait();
+			
 			break;
 		case syscallJoin:
 			System.out.println("Syscall Join");
@@ -259,27 +264,38 @@ public class Kernel implements Runnable{
 		case syscallCreate:
 			System.out.println("Syscall Create");
 			handleCreate();
+			
+			simulateIOWait();
 			break;
 		case syscallOpen:
 			System.out.println("Syscall Open");
 			handleOpen();
+			
+			simulateIOWait();
 			break;
 		case syscallRead:
 			//System.out.println("Syscall Read");
 			handleRead();
+			
+			simulateIOWait();
 			break; 
 		case syscallWrite:
 			//System.out.println("Syscall Write");
 			handleWrite();
+			
+			simulateIOWait();
 			break; 
 		case syscallClose:
 			System.out.println("Syscall Close");
 			handleClose();
+			
+			simulateIOWait();
 			break;
 		case syscallUnlink:
 			System.out.println("Syscall Unlink");
 			handleUnlink();
 
+			simulateIOWait();
 			break; 
 		case syscallKernelInit:
 			if(!initialized){
@@ -697,5 +713,30 @@ public class Kernel implements Runnable{
 		}
 		
 		throw new KernelFault("Too many processes open");
+	}
+	
+	// list of processes we are simulating IO waiting on
+	private List<PCB> ioWaiters = new ArrayList<PCB>();
+	
+	public void simulateIOWait(){
+		process.state = PCB.waiting;
+		// wait for one quantum
+		process.waitTicks = Configuration.quantum;
+		// not sure about that
+		process.ticks = 0;
+		
+		ioWaiters.add(process);
+	}
+	
+	// used by the IO wait simulation
+	private void decrementIOWaiters() {
+		for(PCB pcb : ioWaiters){
+			
+			if(pcb.waitTicks == 0){
+				pcb.state = PCB.ready;
+			}else{
+				pcb.waitTicks--;
+			}
+		}
 	}
 }
