@@ -25,6 +25,7 @@
 #define syscallAccept		12
 #define syscallInitialize	13
 #define syscallMoreMemory	14
+#define syscallFork			15
 
 /* Don't want the assembler to see C code, but start.s includes syscall.h. */
 #ifndef START_S
@@ -252,6 +253,11 @@ int initialize();
 * get a page of memory from the OS to use
 */
 int more_memory(void *page);
+
+/**
+* Fork the current process
+*/
+int fork();
 
 #endif /* START_S */
 

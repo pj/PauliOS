@@ -1,6 +1,7 @@
 package kernel;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import coff.CoffLoadException;
 import coff.Loader;
@@ -47,7 +48,7 @@ public class Kernel implements Runnable{
 	private static final int syscallHalt = 0, syscallExit = 1, syscallExec = 2,
 	syscallJoin = 3, syscallCreate = 4, syscallOpen = 5,
 	syscallRead = 6, syscallWrite = 7, syscallClose = 8,
-	syscallUnlink = 9, syscallKernelInit = 13;
+	syscallUnlink = 9, syscallKernelInit = 13, syscallMoreMemory = 14, syscallFork = 15;
 	
 	private Machine machine;
 	
@@ -280,7 +281,10 @@ public class Kernel implements Runnable{
 			System.out.println("Syscall Unlink");
 			handleUnlink();
 
-			break; 
+			break;
+		case syscallFork:
+			handleFork();
+			break;
 		case syscallKernelInit:
 			if(!initialized){
 				initialize();
@@ -293,6 +297,34 @@ public class Kernel implements Runnable{
 		}
 	}
 	
+	private void handleFork() {
+		// create a new process based on the old one
+		PCB child = new PCB();
+		
+		child.name = process.name;
+		child.state = PCB.ready;
+		child.ticks = 0;
+		child.userRegisters = Arrays.copyOf(process.userRegisters, process.userRegisters.length);
+		child.parent = process.pid;
+		child.joining = -1;
+		child.statusPointer =-1;
+		
+		// copy page table
+		//child.pageTable
+		
+		for(int i = 0; i < process.pageTable.length; i++){
+			
+		}
+		
+		// copy files
+		
+		child.userRegisters[Processor.regV0] = 0;
+		
+		int child_pid = addProcess(child);
+		
+		process.userRegisters[Processor.regV0] = child_pid;
+	}
+
 	/**
 	 * Syscall handler methods
 	 */
@@ -372,8 +404,13 @@ public class Kernel implements Runnable{
 		new_process.pageTable[1] = new Page(1, -1, false, false, false, false);		
 		try {
 			Loader loader = new Loader();
-				
-			loader.load(fid, new_process, fs, this, machine.memory(), args);
+			
+			String[] nameArgs = new String[args.length+1];
+			
+			nameArgs[0] = name;
+			System.arraycopy(args, 0, nameArgs, 1, args.length);
+			
+			loader.load(fid, new_process, fs, this, machine.memory(), nameArgs);
 			
 			// by default, everything's 0
 			for (int i = 0; i < Processor.numUserRegisters; i++)

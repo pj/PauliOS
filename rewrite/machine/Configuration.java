@@ -22,7 +22,7 @@ public class Configuration {
 	public final static int maxProcesses = 256;
 	
 	/** Name of the program to load and execute on startup*/
-	public static String shellProgramName = "testwrite.coff";
+	public static String shellProgramName = "cat.coff";
 	
 	/** first process args */
 	public static String[] processArgs;
