@@ -38,6 +38,8 @@ public class Loader {
 		this.memory = memory;
 		this.fid = fid;
 		
+		kernel.checkInMemory(0);
+		
 		// read headers from file to memory
 		int headersRead = fs.read(fid, Configuration.totalHeaderLength, 0, kernel, process);
 		
@@ -60,20 +62,10 @@ public class Loader {
 		// next comes the stack; stack pointer initially points to top of it
 		numPages += Configuration.stackPages;
 		stackPointer = numPages * Configuration.pageSize;
-
-		// create stack pages if necessary
-		for(int i = numPages - Configuration.stackPages; i <= numPages; i++){
-			if(process.pageTable[i] == null){
-				process.pageTable[i] = new Page(i, -1, false, false, false, false);
-			}
-		}
 		
 		// and finally reserve 1 page for arguments
 		numPages++;
 		
-		if(process.pageTable[numPages] == null){
-			process.pageTable[numPages] = new Page(numPages, -1, false, false, false, false);
-		}
 		
 		//System.out.println(numPages);
 		
@@ -86,11 +78,11 @@ public class Loader {
 
 		//System.out.println("argvPointer: " + Integer.toHexString(argvPointer));
 		
-		kernel.checkInMemory(argvPointer);
-		
 		argc = args.length;
 		argv = argvPointer;
 
+		kernel.checkInMemory(argv);
+		
 		for (int i = 0; i < argv_b.length; i++) {
 			// write string pointer
 			memory.writeMem(argvPointer, 4, stringsStartPointer);
@@ -193,11 +185,6 @@ public class Loader {
 			int vpn = section.firstVPN + i;
 			
 			//System.out.println("Loading sections: " + vpn);
-			
-			// create page
-			if(process.pageTable[vpn] == null){
-				process.pageTable[vpn] = new Page(vpn, -1, false, false, false, false);
-			}
 
 			
 			//System.out.println("Section file start: " + fileStart);
@@ -211,6 +198,15 @@ public class Loader {
 			fs.seek(fid, fileStart, process);
 
 			fs.read(fid, Configuration.pageSize, memoryPointer, kernel, process);
+			
+			// write data to page table
+			Page page = process.pageTable[vpn];
+			for(int n = 0; n < Configuration.pageSize; n++){
+				
+				int value = memory.readMem(memoryPointer, 1);
+				
+				page.data[n] = (byte)value;
+			}
 			
 			//System.out.println("First Instruction: " + Integer.toHexString(memory.readMem(memoryPointer, 4)));
 			
@@ -230,7 +226,7 @@ public class Loader {
 				memory.writeMem(memoryPointer+j, 1, 0);
 			}
 			
-			 fileStart += Configuration.pageSize;
+			fileStart += Configuration.pageSize;
 		}
 
 	}

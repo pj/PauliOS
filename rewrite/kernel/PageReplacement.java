@@ -9,12 +9,14 @@ import machine.Page;
  *
  */
 public interface PageReplacement {
-	public void replace();
+	public void replace(Page pageToLoad);
 	
 	public Page getReplacedPage();
 	
 	public int getPhysicalPageNumber();
 	
 	public void addProcess(PCB pcb);
+	
+	public void removeProcess(PCB pcb);
 
 }

@@ -12,4 +12,6 @@ public interface Scheduler {
 
 	void addProcess(PCB pcb);
 
+	void removeProcess(PCB pcb);
+
 }

@@ -22,7 +22,7 @@ public class Configuration {
 	public final static int maxProcesses = 256;
 	
 	/** Name of the program to load and execute on startup*/
-	public static String shellProgramName = "testwrite.coff";
+	public static String shellProgramName = "echo.coff";
 	
 	/** first process args */
 	public static String[] processArgs;
@@ -34,7 +34,9 @@ public class Configuration {
 	public static final int pageSize = 0x400;
 	
 	/** Number of physical pages in memory. */
-	public static int numPhysPages = 32;
+	public static int numPhysPages = 4;
+	
+	public static int numVirtualPages = 32;
 
 	/** How often the clock ticks */
 	public static int switchTime = 5;

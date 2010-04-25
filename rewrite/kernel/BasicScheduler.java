@@ -36,5 +36,10 @@ public class BasicScheduler implements Scheduler {
 		// TODO Auto-generated method stub
 		processes[pcb.pid] = pcb;
 	}
+	
+	@Override
+	public void removeProcess(PCB pcb){
+		processes[pcb.pid] = null;
+	}
 
 }
