@@ -108,20 +108,16 @@ public class Kernel implements Runnable{
 	 */
 	public void schedule(){
 		// do nothing
-		if(process != null && process.ticks < process.quantum && process.state == PCB.ready){
+		if(process != null && process.ticks < process.quantum && process.state == PCB.running){
 			return;
 		}
-		
-		PCB nextProcess = this.scheduler.schedule();
-		
-		if(nextProcess == null){
-			throw new KernelFault("No Processes available for scheduling");
-		}
-		
+				
 		// save current process
-		if(process != null){
-			process.ticks = 0;
+		if(process != null){		
+			if(process.state == PCB.running)
+				process.state = PCB.ready;
 			
+			// save registers
 			for (int i = 0; i < Processor.numUserRegisters; i++){
 				process.userRegisters[i] = machine.processor().readRegister(i);
 			}
@@ -141,10 +137,22 @@ public class Kernel implements Runnable{
 			}
 		}
 		
+		// get next process
+		PCB nextProcess = this.scheduler.schedule(process);
+		
+		if(process != null)
+			process.ticks = 0;
+		
+		if(nextProcess == null){
+			throw new KernelFault("No Processes available for scheduling");
+		}
+		
 		// restore next process
 		for (int i = 0; i < Processor.numUserRegisters; i++){
 			machine.processor().writeRegister(i, nextProcess.userRegisters[i]);
 		}
+		
+		nextProcess.state = PCB.running;
 		
 		machine.memory().setPageTable(nextProcess.pageTable);
 		
@@ -621,10 +629,8 @@ public class Kernel implements Runnable{
 		this.initialized = true;
 		
 		this.scheduler = (Scheduler) Lib.constructObject(Configuration.scheduler);
-		this.scheduler.setProcesses(processes);
 		
 		this.pageReplacer = (PageReplacement) Lib.constructObject(Configuration.replacer);
-		this.pageReplacer.setProcesses(processes);
 		
 		// create file system
 		this.fs = (FileSystem) Lib.constructObject(Configuration.fileSystem);
@@ -708,6 +714,8 @@ public class Kernel implements Runnable{
 			if(processes[i] == null){
 				pcb.pid = i;
 				processes[i] = pcb;
+				scheduler.addProcess(pcb);
+				pageReplacer.addProcess(pcb);
 				return i;
 			}
 		}
@@ -722,8 +730,6 @@ public class Kernel implements Runnable{
 		process.state = PCB.waiting;
 		// wait for one quantum
 		process.waitTicks = Configuration.quantum;
-		// not sure about that
-		process.ticks = 0;
 		
 		ioWaiters.add(process);
 	}

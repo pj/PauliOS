@@ -34,11 +34,6 @@ public class BasicPageReplacement implements PageReplacement {
 	}
 
 	@Override
-	public void setProcesses(PCB[] processes) {
-		this.processes = processes;
-	}
-
-	@Override
 	public int getPhysicalPageNumber() {
 		return physicalPageNumber;
 	}
@@ -46,6 +41,12 @@ public class BasicPageReplacement implements PageReplacement {
 	@Override
 	public Page getReplacedPage() {
 		return replacementPage;
+	}
+	
+	@Override
+	public void addProcess(PCB pcb) {
+		// TODO Auto-generated method stub
+		processes[pcb.pid] = pcb;
 	}
 
 }

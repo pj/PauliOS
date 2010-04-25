@@ -9,12 +9,12 @@ import machine.Configuration;
  */
 public class BasicScheduler implements Scheduler {
 
-	private PCB[] processes;
+	private PCB[] processes = new PCB[Configuration.maxProcesses];
 	
 	private int next = 0;
 	
 	@Override
-	public PCB schedule() {
+	public PCB schedule(PCB currentProcess) {
 
 		int first = next;
 		
@@ -32,8 +32,9 @@ public class BasicScheduler implements Scheduler {
 	}
 
 	@Override
-	public void setProcesses(PCB[] processes) {
-		this.processes = processes;
+	public void addProcess(PCB pcb) {
+		// TODO Auto-generated method stub
+		processes[pcb.pid] = pcb;
 	}
 
 }

@@ -25,7 +25,7 @@ public class PCB {
 	
 	public IOOperation currentIO;
 	
-	public int state = 0;
+	public int state = ready;
 	
 	// name of file we are running
 	public String name;
