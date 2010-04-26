@@ -44,15 +44,16 @@ public class CreateFS {
 		// get list of files from c directory
 		File testDir = new File("files/");
 		
-//		File[] files = testDir.listFiles(new FilenameFilter() {
-//			@Override
-//			public boolean accept(File dir, String name) {
-//
-//				return name.contains(".coff");
-//			}
-//		});
-		
-		File[] files = testDir.listFiles();
+		File[] files = testDir.listFiles(new FilenameFilter() {
+			@Override
+			public boolean accept(File dir, String name) {
+				if(name.startsWith(".")){
+					return false;
+				}else{
+					return true;
+				}
+			}
+		});
 		
 		// get list of files from files directory
 		
