@@ -9,7 +9,7 @@
 #		setenv ARCHDIR ../mips-x86.win32-xgcc
 
 # you need to point to the right executables
-GCCDIR = /Users/pauljohnson/ConcurrentTeaching/bin/decstation-ultrix-
+GCCDIR = ../compiler
 
 ASFLAGS = -mips1
 CPPFLAGS = -E
