@@ -25,7 +25,7 @@ public class PCB {
 	
 	public IOOperation currentIO;
 	
-	public int state = 0;
+	public int state = ready;
 	
 	// name of file we are running
 	public String name;
@@ -43,18 +43,12 @@ public class PCB {
 	// number of ticks this process has been on the processor
 	public int ticks;
 	
-	/**
-	 * This processes IO Operation
-	 */	
-	public IOOperation getCurrentIO() {
-		return currentIO;
-	}
-
-	public void setCurrentIO(IOOperation currentIO) {
-		this.currentIO = currentIO;
-	}
-
-
+	// this might be changed by the scheduler
+	public int quantum = Configuration.quantum;
+	
+	// counter for how long this process should simulate IO waiting
+	public int waitTicks;
+	
 	// files
 	public OpenFile[] files = new OpenFile[Configuration.maxFiles];
 

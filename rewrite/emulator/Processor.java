@@ -460,6 +460,9 @@ public final class Processor {
 				System.err.println("Warning: encountered unimplemented inst");
 
 			case Mips.INVALID:
+				
+				EmulatorHelpers.print(this);
+				
 				throw new MipsException(this, memory, MipsException.exceptionIllegalInstruction);
 
 			default:

@@ -1,7 +1,12 @@
 package kernel;
 
 import java.io.IOException;
+<<<<<<< HEAD
 import java.util.Arrays;
+=======
+import java.util.ArrayList;
+import java.util.List;
+>>>>>>> master
 
 import coff.CoffLoadException;
 import coff.Loader;
@@ -88,7 +93,7 @@ public class Kernel implements Runnable{
 		case exceptionInterrupt:
 			interrupt();
 			
-			if(process.ticks > Configuration.quantum){
+			if(process.ticks > process.quantum){
 				//machine.processor().advancePC();
 			}
 			break;
@@ -107,20 +112,16 @@ public class Kernel implements Runnable{
 	 */
 	public void schedule(){
 		// do nothing
-		if(process != null && process.ticks < Configuration.quantum && process.state == PCB.ready){
+		if(process != null && process.ticks < process.quantum && process.state == PCB.running){
 			return;
 		}
-		
-		PCB nextProcess = this.scheduler.schedule();
-		
-		if(nextProcess == null){
-			throw new KernelFault("No Processes available for scheduling");
-		}
-		
+				
 		// save current process
-		if(process != null){
-			process.ticks = 0;
+		if(process != null){		
+			if(process.state == PCB.running)
+				process.state = PCB.ready;
 			
+			// save registers
 			for (int i = 0; i < Processor.numUserRegisters; i++){
 				process.userRegisters[i] = machine.processor().readRegister(i);
 			}
@@ -140,15 +141,24 @@ public class Kernel implements Runnable{
 			}
 		}
 		
+		// get next process
+		PCB nextProcess = this.scheduler.schedule(process);
+		
+		if(process != null)
+			process.ticks = 0;
+		
+		if(nextProcess == null){
+			throw new KernelFault("No Processes available for scheduling");
+		}
+		
 		// restore next process
 		for (int i = 0; i < Processor.numUserRegisters; i++){
 			machine.processor().writeRegister(i, nextProcess.userRegisters[i]);
 		}
 		
-
+		nextProcess.state = PCB.running;
 		
 		machine.memory().setPageTable(nextProcess.pageTable);
-		
 		
 		process = nextProcess;
 		
@@ -170,12 +180,27 @@ public class Kernel implements Runnable{
 		
 		if(interrupt instanceof Timer){
 			process.ticks++;
+			
+			decrementIOWaiters();
+			
+			// reset used flags on pages - used by some page replacement algorithms
+//			for(PCB pcb : processes){
+//				if(pcb != null){
+//					for(Page page : pcb.pageTable){
+//						if(page != null){
+//							page.used = false;
+//						}
+//					}
+//				}
+//			}
 		}
 		
 		machine.interrupting = null;
 		interrupt.acknowledge();
 	}
 	
+
+
 	/**
 	 * Handle a page fault
 	 */
@@ -189,22 +214,43 @@ public class Kernel implements Runnable{
 		
 		Page virtualPage = process.pageTable[virtualPageNumber];
 		
+		// page doesn't exist yet - create one
+		if(virtualPage == null){
+			virtualPage = new Page(virtualPageNumber, -1, false, false, false, false);
+			process.pageTable[virtualPageNumber] = virtualPage;
+		}
+		
 		// get physical page number to put virtual page in
-		//int physicalPageNumber = pageReplacer.getPage();
-		pageReplacer.replace();
+		pageReplacer.replace(virtualPage);
 		Page replacedPage = pageReplacer.getReplacedPage();
 		
+		//System.out.println("Process " + process.name +" Physical page number " + pageReplacer.getPhysicalPageNumber() + " Virtual Page number " + virtualPageNumber);
+		
 		if(replacedPage != null){
+			//System.out.println("Replacing page");
+			
+			if(replacedPage.dirty){
+				PCB tempProc = processes[replacedPage.pid];
+				
+				machine.memory().setPageTable(tempProc.pageTable);
+				
+				// evicting page set dirty to copy data from memory to virtual page
+				for(int i = 0; i < Configuration.pageSize; i++){
+					int t = Memory.makeAddress(replacedPage.vpn, i);
+					try {
+						replacedPage.data[i] = (byte)machine.memory().readMem(t, 1);
+					} catch (MipsException e) {
+						throw new KernelFault("bad memory address");
+					}
+				}
+				
+				machine.memory().setPageTable(process.pageTable);
+			}
+			
 			replacedPage.ppn = -1;
 			replacedPage.present = false;
 			replacedPage.readOnly = false;
 			replacedPage.used = false;
-			
-			if(replacedPage.dirty){
-				// evicting page set dirty to copy data from memory to virtual page
-				System.arraycopy(machine.memory().mainMemory, replacedPage.ppn * Configuration.pageSize, replacedPage, 0, Configuration.pageSize);
-			}
-			
 			replacedPage.dirty = false;
 		}
 		
@@ -240,51 +286,53 @@ public class Kernel implements Runnable{
 		
 		switch(syscall){
 		case syscallHalt:
-			System.out.println("Syscall Halt");
 			handleHalt();
 						
 			break;
 		case syscallExit:
-			System.out.println("Syscall Exit");
 			handleExit();
 			break;
 		case syscallExec:
-			System.out.println("Syscall Exec");
 			handleExec();
+			
+			simulateIOWait();
 			
 			break;
 		case syscallJoin:
-			System.out.println("Syscall Join");
 			handleJoin();
 			break;
 		case syscallCreate:
-			System.out.println("Syscall Create");
 			handleCreate();
+			
+			simulateIOWait();
 			break;
 		case syscallOpen:
-			System.out.println("Syscall Open");
 			handleOpen();
+			
+			simulateIOWait();
 			break;
 		case syscallRead:
-			//System.out.println("Syscall Read");
 			handleRead();
+			
+			simulateIOWait();
 			break; 
 		case syscallWrite:
-			//System.out.println("Syscall Write");
 			handleWrite();
+			
+			simulateIOWait();
 			break; 
 		case syscallClose:
-			System.out.println("Syscall Close");
 			handleClose();
+			
+			simulateIOWait();
 			break;
 		case syscallUnlink:
-			System.out.println("Syscall Unlink");
 			handleUnlink();
-
+			simulateIOWait();
 			break;
 		case syscallFork:
 			handleFork();
-			break;
+			break; 
 		case syscallKernelInit:
 			if(!initialized){
 				initialize();
@@ -342,11 +390,11 @@ public class Kernel implements Runnable{
 		
 		String name = getStringFromMemoryPointer(namePointer);
 		
+		System.out.println(name);
+		
 		int argc = machine.processor().readRegister(Processor.regA1);
 		
 		int argsPointer = machine.processor().readRegister(Processor.regA2);
-		
-		checkInMemory(argsPointer);
 		
 		// read args from memory
 		String[] args = new String[argc];
@@ -354,8 +402,6 @@ public class Kernel implements Runnable{
 		for(int i = 0; i < argc; i++){
 			try {
 				int argPointer = machine.memory().readMem(argsPointer+(i*4), 4);
-				
-				checkInMemory(argPointer);
 				
 				args[i] = getStringFromMemoryPointer(argPointer);
 			} catch (MipsException e) {
@@ -377,7 +423,7 @@ public class Kernel implements Runnable{
 		
 		new_process.name = name;
 		
-		new_process.pageTable = new Page[Configuration.numPhysPages];
+		new_process.pageTable = new Page[Configuration.numVirtualPages];
 		
 		addProcess(new_process);
 		
@@ -391,17 +437,14 @@ public class Kernel implements Runnable{
 		int fid = fs.open(name, new_process);
 		
 		if(fid == -1){
-			throw new KernelFault("Shell program not found");
+			throw new KernelFault("Program not found");
 		}
 		
 		// swap the new processes page table into memory so we can read data into it
 		machine.memory().setPageTable(new_process.pageTable);
 		PCB old_process = process;
 		process = new_process;
-
-		// add a couple of pages to memory to hold file headers while loading
-		new_process.pageTable[0] = new Page(0, -1, false, false, false, false);
-		new_process.pageTable[1] = new Page(1, -1, false, false, false, false);		
+	
 		try {
 			Loader loader = new Loader();
 			
@@ -441,6 +484,8 @@ public class Kernel implements Runnable{
 		} catch (MipsException e) {
 			throw new KernelFault("Tried to execute file that isn't a coff file");
 		}
+		
+		machine.processor().writeRegister(Processor.regV0, new_process.pid);
 	}
 
 	private void handleClose() {
@@ -572,22 +617,26 @@ public class Kernel implements Runnable{
 	}
 	
 	private String getStringFromMemoryPointer(int namePointer){
-		Page page = checkInMemory(namePointer);
 		
-		// page should contain a valid ppn here
+		checkInMemory(namePointer);
 		
-		byte[] memory = machine.memory().mainMemory;
+		int i = 0;
 		
-		int start = page.ppn * Configuration.pageSize + Memory.offsetFromAddress(namePointer);
-		int length = start;
-		byte val;
+		byte b;
 		
-		while((val = memory[length]) != 0){
-			length++;
+		StringBuilder sb = new StringBuilder();
+		
+		try {
+			while((b = (byte)machine.memory().readMem(namePointer+i, 1)) != 0){
+				sb.append((char)b);
+				
+				i++;
+			}
+		} catch (MipsException e) {
+			throw new KernelFault("bad address");
 		}
 		
-		String name = Lib.bytesToString(memory, start, length-start);
-		return name;
+		return sb.toString();
 	}
 	
 	
@@ -610,7 +659,7 @@ public class Kernel implements Runnable{
 		
 		Page page = process.pageTable[vpn];
 		
-		if(!page.present){
+		if(page == null || !page.present){
 			//System.out.println("Faulting on check");
 			machine.processor().writeRegister(Processor.regBadVAddr, namePointer);
 			pageFault();
@@ -642,10 +691,8 @@ public class Kernel implements Runnable{
 		this.initialized = true;
 		
 		this.scheduler = (Scheduler) Lib.constructObject(Configuration.scheduler);
-		this.scheduler.setProcesses(processes);
 		
 		this.pageReplacer = (PageReplacement) Lib.constructObject(Configuration.replacer);
-		this.pageReplacer.setProcesses(processes);
 		
 		// create file system
 		this.fs = (FileSystem) Lib.constructObject(Configuration.fileSystem);
@@ -699,12 +746,17 @@ public class Kernel implements Runnable{
 				
 				machine.memory().setPageTable(joining.pageTable);
 				
-				Page page = checkInMemory(joining.statusPointer);
+				checkInMemory(joining.statusPointer);
 				
-				int start = page.ppn * Configuration.pageSize + Memory.offsetFromAddress(joining.statusPointer);
-				
-				System.arraycopy(Lib.bytesFromInt(status), 0, machine.memory().mainMemory, start, 4);
-				
+				byte[] statusBytes = Lib.bytesFromInt(status);
+				for(int j = 0; j < statusBytes.length; j++){
+					try {
+						machine.memory().writeMem(joining.statusPointer+j, 1, statusBytes[j]);
+					} catch (MipsException e) {
+						throw new KernelFault("unable to write to memory");
+					}
+				}
+	
 				process = oldProcess;
 				machine.memory().setPageTable(oldProcess.pageTable);
 				
@@ -721,7 +773,14 @@ public class Kernel implements Runnable{
 				processes[i].parent = -1;
 			}
 		}
+		
+		// remove pages
+		pageReplacer.removeProcess(process);
 
+		// remove from scheduler
+		scheduler.removeProcess(process);
+		
+		process = null;
 	}
 	
 	public int addProcess(PCB pcb){
@@ -729,10 +788,35 @@ public class Kernel implements Runnable{
 			if(processes[i] == null){
 				pcb.pid = i;
 				processes[i] = pcb;
+				scheduler.addProcess(pcb);
+				pageReplacer.addProcess(pcb);
 				return i;
 			}
 		}
 		
 		throw new KernelFault("Too many processes open");
+	}
+	
+	// list of processes we are simulating IO waiting on
+	private List<PCB> ioWaiters = new ArrayList<PCB>();
+	
+	public void simulateIOWait(){
+		process.state = PCB.waiting;
+		// wait for one quantum
+		process.waitTicks = Configuration.quantum;
+		
+		ioWaiters.add(process);
+	}
+	
+	// used by the IO wait simulation
+	private void decrementIOWaiters() {
+		for(PCB pcb : ioWaiters){
+			
+			if(pcb.waitTicks == 0){
+				pcb.state = PCB.ready;
+			}else{
+				pcb.waitTicks--;
+			}
+		}
 	}
 }

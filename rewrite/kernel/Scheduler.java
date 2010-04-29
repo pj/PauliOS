@@ -8,8 +8,10 @@ package kernel;
  */
 public interface Scheduler {
 
-	void setProcesses(PCB[] processes);
+	PCB schedule(PCB currentProcess);
 
-	PCB schedule();
+	void addProcess(PCB pcb);
+
+	void removeProcess(PCB pcb);
 
 }
