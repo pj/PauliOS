@@ -341,15 +341,17 @@ public class Kernel implements Runnable{
 			throw new KernelFault("Unknown Syscall");
 		}
 	}
-	
+
+	/**
+	 * Clones a process
+	 */
 	private void handleFork() {
-		// create a new process based on the old one
 		PCB child = new PCB();
 		
 		child.name = process.name;
 		child.state = PCB.ready;
 		child.ticks = 0;
-		child.userRegisters = Arrays.copyOf(process.userRegisters, process.userRegisters.length);
+		child.userRegisters = Arrays.copyOf(machine.processor().registers, machine.processor().registers.length);
 		child.parent = process.pid;
 		child.joining = -1;
 		child.statusPointer =-1;
@@ -368,7 +370,7 @@ public class Kernel implements Runnable{
 			// save page before setting page data
 			if (oldPage.dirty) {
 				// evicting page set dirty to copy data from mem
-				for (int j = 0; j < Configuration.pageSize; i++) {
+				for (int j = 0; j < Configuration.pageSize; j++) {
 					int t = Memory.makeAddress(oldPage.vpn, j);
 					try {
 						oldPage.data[j] = (byte) machine.memory().readMem(t, 1);
@@ -376,11 +378,11 @@ public class Kernel implements Runnable{
 						throw new KernelFault("bad memory address");
 					}
 				}
-
 			}
 
-			// set page data
-			System.arraycopy(oldPage.data, 0, child.pageTable[i], 0, Configuration.pageSize);
+			child.pageTable[i] = new Page(oldPage.vpn, -1, false, false, false, false);
+			
+			System.arraycopy(oldPage.data, 0, child.pageTable[i].data, 0, Configuration.pageSize);
 		}
 		
 		// copy files
@@ -388,50 +390,12 @@ public class Kernel implements Runnable{
 		
 		child.userRegisters[Processor.regV0] = 0;
 		
+		child.userRegisters[Processor.regPC] += 4;
+		
 		int child_pid = addProcess(child);
 		
-		process.userRegisters[Processor.regV0] = child_pid;
+		machine.processor().writeRegister(Processor.regV0, child_pid);
 	}
-	
-//	                // copy page table
-//	-               //child.pageTable
-//	+               child.pageTable = new Page[Configuration.numVirtualPages];
-//	                
-//	                for(int i = 0; i < process.pageTable.length; i++){
-//	+                       Page oldPage = process.pageTable[i];
-//	+                       
-//	+                       if(oldPage == null){
-//	+                               continue;
-//	+                       }
-//	+                       
-//	+                       // map the page in two places
-//	+                       if(oldPage.shared){
-//	+                               child.pageTable[i] = oldPage;
-//	+                               continue;
-//	+                       }
-//	+                       
-//	+                       // save page before setting page data
-//	+                       if(oldPage.dirty){                      
-//	+                               // evicting page set dirty to copy data from mem
-//	+                               for(int j = 0; j < Configuration.pageSize; i++){
-//	+                                       int t = Memory.makeAddress(oldPage.vpn, 
-//	+                                       try {
-//	+                                               oldPage.data[j] = (byte)machine.
-//	+                                       } catch (MipsException e) {
-//	+                                               throw new KernelFault("bad memor
-//	+                                       }
-//	+                               }
-//	+                               
-//	+                       }
-//	                        
-//	+                       // set page data
-//	+                       System.arraycopy(oldPage.data, 0, child.pageTable[i], 0,
-//	                }
-//	                
-//	                // copy files
-//	+               child.files = process.files;
-//	                
-//	                child.userRegisters[Processor.regV0] = 0;
 
 	/**
 	 * Syscall handler methods

@@ -163,7 +163,7 @@ public final class Processor {
 	public static final int numUserRegisters = 38;
 
 	/** MIPS registers accessible to the kernel. */
-	int registers[] = new int[numUserRegisters];
+	public int registers[] = new int[numUserRegisters];
 
 
 	/** The kernel exception handler, called on every user exception. */
