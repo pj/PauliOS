@@ -7,6 +7,7 @@ package coff;
  *
  */
 public class SectionDetail {
+	// The name of the section such as ".text" or ".data"
 	public String name;
 	public int vaddr;
 

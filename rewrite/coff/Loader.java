@@ -101,6 +101,15 @@ public class Loader {
 		}
 	}
 	
+	/**
+	 * Load each program section into memory
+	 * 
+	 * @param numSections
+	 * @param optionalHeaderLength
+	 * @return
+	 * @throws CoffLoadException
+	 * @throws MipsException
+	 */
 	private int loadSections(int numSections, int optionalHeaderLength) throws CoffLoadException, MipsException {
 		int numPages = 0;
 		
@@ -177,6 +186,13 @@ public class Loader {
 		return numPages;
 	}
 	
+	/**
+	 * Load a section of a file into memory
+	 * 
+	 * @param section
+	 * @throws CoffLoadException
+	 * @throws MipsException
+	 */
 	protected void loadSection(SectionDetail section) throws CoffLoadException, MipsException {
 		
 		int fileStart = section.contentOffset;
@@ -186,7 +202,6 @@ public class Loader {
 			
 			//System.out.println("Loading sections: " + vpn);
 
-			
 			//System.out.println("Section file start: " + fileStart);
 			
 			int memoryPointer = Memory.makeAddress(vpn, 0);
@@ -198,15 +213,6 @@ public class Loader {
 			fs.seek(fid, fileStart, process);
 
 			fs.read(fid, Configuration.pageSize, memoryPointer, kernel, process);
-			
-			// write data to page table
-			Page page = process.pageTable[vpn];
-			for(int n = 0; n < Configuration.pageSize; n++){
-				
-				int value = memory.readMem(memoryPointer, 1);
-				
-				page.data[n] = (byte)value;
-			}
 			
 			//System.out.println("First Instruction: " + Integer.toHexString(memory.readMem(memoryPointer, 4)));
 			
