@@ -26,6 +26,8 @@ public class FileSystemTest extends TestCase {
 		fs = new BasicFileSystem();
 		fs.initialize(machine);
 		
+		Configuration.driveDelay = 0;
+		
 		super.setUp();
 	}
 	
@@ -239,6 +241,12 @@ public class FileSystemTest extends TestCase {
 			out[i] = (byte) machine.memory().readMem(i, 1);
 		}
 		
+		for(int x = 0; x < 2000; x++){
+			if(out[x] != data[x]){
+				System.out.println(out[x] + " " + data[x] + " " + x);
+			}
+		}
+		
 		assertTrue(Arrays.equals(data, out));
 	}
 	
@@ -302,6 +310,109 @@ public class FileSystemTest extends TestCase {
 		byte[] out = new byte[data.length];
 		
 		fs.seek(fid, 200, process);
+		
+		rval = fs.read(fid, out.length, 0, new Kernel(machine), process);
+		
+		for(int i =0; i < out.length; i++){
+			out[i] = (byte) machine.memory().readMem(i, 1);
+		}
+		
+		assertTrue(Arrays.equals(data, out));
+	}
+	
+	public void testWriteBeyondLength() throws Exception{
+		PCB process = new PCB();
+		
+		int fid = fs.create("blah", process);
+		
+		fs.seek(fid, 3000, process);
+		
+		byte[] data = new byte[2000];
+		
+		Arrays.fill(data, (byte)32);
+		
+		// write data to memory
+		for(int i = 0; i < data.length; i++){
+			machine.memory().writeMem(i, 1, data[i]);
+		}
+		
+		int rval = fs.write(fid, data.length, 0, new Kernel(machine), process);
+		
+		assertTrue(rval == data.length);
+		
+		byte[] out = new byte[data.length];
+		
+		fs.seek(fid, 3000, process);
+		
+		rval = fs.read(fid, out.length, 0, new Kernel(machine), process);
+		
+		for(int i =0; i < out.length; i++){
+			out[i] = (byte) machine.memory().readMem(i, 1);
+		}
+		
+		assertTrue(Arrays.equals(data, out));
+	}
+	
+	public void testWriteBoundary() throws Exception{
+		PCB process = new PCB();
+		
+		int fid = fs.create("blah", process);
+		
+		byte[] data = new byte[3072];
+		
+		Arrays.fill(data, (byte)32);
+		
+		// write data to memory
+		for(int i = 0; i < data.length; i++){
+			machine.memory().writeMem(i, 1, data[i]);
+		}
+		
+		int rval = fs.write(fid, data.length, 0, new Kernel(machine), process);
+		
+		assertTrue(rval == data.length);
+		
+		byte[] out = new byte[data.length];
+		
+		fs.seek(fid, 0, process);
+		
+		rval = fs.read(fid, out.length, 0, new Kernel(machine), process);
+		
+		for(int i =0; i < out.length; i++){
+			out[i] = (byte) machine.memory().readMem(i, 1);
+		}
+		
+		assertTrue(Arrays.equals(data, out));
+	}
+	
+	public void testWriteBeyondLengthBoundary() throws Exception{
+		PCB process = new PCB();
+		
+		int fid = fs.create("blah", process);
+		
+		byte[] data = new byte[1024];
+		
+		Arrays.fill(data, (byte)32);
+		
+		// write data to memory
+		for(int i = 0; i < data.length; i++){
+			machine.memory().writeMem(i, 1, data[i]);
+		}
+		
+		int rval = fs.write(fid, data.length, 0, new Kernel(machine), process);
+		
+		assertTrue(rval == data.length);
+		
+		fs.seek(fid, 3072, process);
+		
+		for(int i = 0; i < data.length; i++){
+			machine.memory().writeMem(i, 1, 17);
+		}
+		
+		fs.write(fid, 1024, 0, new Kernel(machine), process);
+		
+		byte[] out = new byte[data.length];
+		
+		fs.seek(fid, 0, process);
 		
 		rval = fs.read(fid, out.length, 0, new Kernel(machine), process);
 		

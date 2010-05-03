@@ -39,13 +39,13 @@ public class Kernel implements Runnable{
 	private boolean initialized = false;
 	
 	// the process scheduler
-	private Scheduler scheduler;
+	Scheduler scheduler;
 	
 	// the algorithm to use for page replacement
-	private PageReplacement pageReplacer;
+	PageReplacement pageReplacer;
 	
 	// the filesystem
-	private FileSystem fs;
+	FileSystem fs;
 	
 	private static final int syscallHalt = 0, syscallExit = 1, syscallExec = 2,
 	syscallJoin = 3, syscallCreate = 4, syscallOpen = 5,
@@ -122,20 +122,6 @@ public class Kernel implements Runnable{
 			for (int i = 0; i < Processor.numUserRegisters; i++){
 				process.userRegisters[i] = machine.processor().readRegister(i);
 			}
-			
-			// save dirty pages to page table
-			for(int i = 0; i < process.pageTable.length; i++){
-				Page entry = process.pageTable[i];
-				
-				if(entry != null && entry.present && entry.dirty){
-					for(int j = 0; j < Configuration.pageSize; j++){
-						try {
-							entry.data[j] = (byte)machine.memory().readMem(Memory.makeAddress(entry.vpn, j), 1);
-						} catch (MipsException e) {
-						}
-					}
-				}
-			}
 		}
 		
 		// get next process
@@ -159,7 +145,7 @@ public class Kernel implements Runnable{
 		
 		process = nextProcess;
 		
-		System.out.println(process.name + " On Processor");
+		//System.out.println(process.name + " pid " + process.pid + " On Processor");
 	}
 	
 	/**
@@ -202,66 +188,37 @@ public class Kernel implements Runnable{
 	 * Handle a page fault
 	 */
 	public void pageFault(){
-		// get page that needs to be inserted
+		// find page that needs to be brought into memory
 		int badVaddr = machine.processor().readRegister(Processor.regBadVAddr);
-		
 		int virtualPageNumber = Memory.pageFromAddress(badVaddr);
+
+		Page virtualPage = machine.memory().pages[virtualPageNumber];
 		
-		//System.out.println("Virtual Page Number: " + virtualPageNumber);
-		
-		Page virtualPage = process.pageTable[virtualPageNumber];
-		
-		// page doesn't exist yet - create one
+		// if the page doesn't exist yet we need to bring it into memory
 		if(virtualPage == null){
 			virtualPage = new Page(virtualPageNumber, -1, false, false, false, false);
 			process.pageTable[virtualPageNumber] = virtualPage;
+			virtualPage.pid = process.pid;
 		}
 		
-		// get physical page number to put virtual page in
+		// use the page replacement algorithm to find a physical page number to put the page in and 
+		// a page to replace if necessary
 		pageReplacer.replace(virtualPage);
 		Page replacedPage = pageReplacer.getReplacedPage();
 		
-		//System.out.println("Process " + process.name +" Physical page number " + pageReplacer.getPhysicalPageNumber() + " Virtual Page number " + virtualPageNumber);
-		
-		if(replacedPage != null){
-			//System.out.println("Replacing page");
+//		if(replacedPage != null){
+//			System.out.println("Loading page " + virtualPageNumber + " of process " + process.name + " " + process.pid + " Replacing " + replacedPage.vpn + " from process " + processes[replacedPage.pid].name + " Into "  + pageReplacer.getPhysicalPageNumber());
+//		}else{
+//			System.out.println("Loading page " + virtualPageNumber  + " of process " + process.name + " Into " + pageReplacer.getPhysicalPageNumber());
+//		}
 			
-			if(replacedPage.dirty){
-				PCB tempProc = processes[replacedPage.pid];
-				
-				machine.memory().setPageTable(tempProc.pageTable);
-				
-				// evicting page set dirty to copy data from memory to virtual page
-				for(int i = 0; i < Configuration.pageSize; i++){
-					int t = Memory.makeAddress(replacedPage.vpn, i);
-					try {
-						replacedPage.data[i] = (byte)machine.memory().readMem(t, 1);
-					} catch (MipsException e) {
-						throw new KernelFault("bad memory address");
-					}
-				}
-				
-				machine.memory().setPageTable(process.pageTable);
-			}
-			
-			replacedPage.ppn = -1;
-			replacedPage.present = false;
-			replacedPage.readOnly = false;
-			replacedPage.used = false;
-			replacedPage.dirty = false;
-		}
+		// If we need to save a page
+		savePage(replacedPage);
 		
 		int physicalPageNumber = pageReplacer.getPhysicalPageNumber();
-		
-		// set details in page table entry
-		virtualPage.ppn = physicalPageNumber;
-		virtualPage.pid = process.pid;
-		virtualPage.present = true;
-		virtualPage.readOnly = false;
-		virtualPage.used = false;
-		virtualPage.dirty = false;
-		
-		System.arraycopy(virtualPage.data, 0, machine.memory().mainMemory, physicalPageNumber * Configuration.pageSize, Configuration.pageSize);
+			
+		// load page from disk if necessary
+		loadPage(virtualPage, physicalPageNumber);
 	}
 	
 	/** 
@@ -348,6 +305,8 @@ public class Kernel implements Runnable{
 	private void handleFork() {
 		PCB child = new PCB();
 		
+
+		
 		child.name = process.name;
 		child.state = PCB.ready;
 		child.ticks = 0;
@@ -359,6 +318,7 @@ public class Kernel implements Runnable{
 		// copy page table
 		child.pageTable = new Page[Configuration.numVirtualPages];
 		
+		int child_pid = addProcess(child);
 
 		for (int i = 0; i < process.pageTable.length; i++) {
 			Page oldPage = process.pageTable[i];
@@ -367,32 +327,52 @@ public class Kernel implements Runnable{
 				continue;
 			}
 
-			// save page before setting page data
-			if (oldPage.dirty) {
-				// evicting page set dirty to copy data from mem
-				for (int j = 0; j < Configuration.pageSize; j++) {
-					int t = Memory.makeAddress(oldPage.vpn, j);
-					try {
-						oldPage.data[j] = (byte) machine.memory().readMem(t, 1);
-					} catch (MipsException e) {
-						throw new KernelFault("bad memory address");
-					}
-				}
-			}
-
+			// copy pages
 			child.pageTable[i] = new Page(oldPage.vpn, -1, false, false, false, false);
 			
-			System.arraycopy(oldPage.data, 0, child.pageTable[i].data, 0, Configuration.pageSize);
+			child.pageTable[i].dirty = oldPage.dirty;
+			child.pageTable[i].used = oldPage.used;
+			child.pageTable[i].pid = child.pid;
+			
+			// copy pages memory to child page - when it is swapped out it will be saved
+			int memoryPointer = Memory.makeAddress(oldPage.vpn, 0);
+			checkInMemory(memoryPointer);
+			
+			// read from memory
+			byte[] buffer = new byte[Configuration.pageSize];
+			
+			for(int x = 0; x < Configuration.pageSize; x++){
+				try {
+					buffer[x] = (byte)machine.memory().readMem(memoryPointer+x, 1);
+				} catch (MipsException e) {
+					throw new KernelFault("Bad address");
+				}
+			}
+			
+			// write to memory
+			machine.memory().setPageTable(child.pageTable);
+			
+			// set process to this so that it creates pages in the right process
+			PCB oldProc = process;
+			process = child;
+			
+			checkInMemory(memoryPointer);
+			
+			for(int x = 0; x < Configuration.pageSize; x++){
+				try {
+					machine.memory().writeMem(memoryPointer+x, 1, buffer[x]);
+				} catch (MipsException e) {
+					throw new KernelFault("Bad address");
+				}
+			}
+			
+			process = oldProc;
+			machine.memory().setPageTable(process.pageTable);
 		}
-		
-		// copy files
-		child.files = process.files;
-		
+			
 		child.userRegisters[Processor.regV0] = 0;
 		
 		child.userRegisters[Processor.regPC] += 4;
-		
-		int child_pid = addProcess(child);
 		
 		machine.processor().writeRegister(Processor.regV0, child_pid);
 	}
@@ -413,8 +393,6 @@ public class Kernel implements Runnable{
 		int namePointer = machine.processor().readRegister(Processor.regA0);
 		
 		String name = getStringFromMemoryPointer(namePointer);
-		
-		System.out.println(name);
 		
 		int argc = machine.processor().readRegister(Processor.regA1);
 		
@@ -476,6 +454,8 @@ public class Kernel implements Runnable{
 			
 			nameArgs[0] = name;
 			System.arraycopy(args, 0, nameArgs, 1, args.length);
+			
+			System.out.println("Loading " + name);
 			
 			loader.load(fid, new_process, fs, this, machine.memory(), nameArgs);
 			
@@ -679,9 +659,7 @@ public class Kernel implements Runnable{
 		// check if page containing pointer is in memory
 		int vpn = Memory.pageFromAddress(namePointer);
 		
-		//System.out.println("Page Number: " + vpn + " Pointer " + namePointer);
-		
-		Page page = process.pageTable[vpn];
+		Page page = machine.memory().pages[vpn];
 		
 		if(page == null || !page.present){
 			//System.out.println("Faulting on check");
@@ -798,6 +776,9 @@ public class Kernel implements Runnable{
 			}
 		}
 		
+		// remove page file from disk
+		fs.unlink(process.pid + "_" + process.name);
+		
 		// remove pages
 		pageReplacer.removeProcess(process);
 
@@ -842,5 +823,82 @@ public class Kernel implements Runnable{
 				pcb.waitTicks--;
 			}
 		}
+	}
+	
+	/**
+	 * save a page to disk if necessary
+	 * 
+	 * @param tempProc 
+	 */
+	void savePage(Page page){	
+		if(page != null){
+			if(page.dirty || !page.saved){
+				PCB proc = processes[page.pid];
+			
+				machine.memory().setPageTable(proc.pageTable);
+				
+				for (int j = 0; j < Configuration.pageSize; j++) {
+					int t = Memory.makeAddress(page.vpn, j);
+					try {
+						page.data[j] = (byte) machine.memory().readMem(t, 1);
+					} catch (MipsException e) {
+						throw new KernelFault("bad memory address");
+					}
+				}
+				
+				machine.memory().setPageTable(process.pageTable);
+			
+				page.saved = true;
+			}
+			
+			page.ppn = -1;
+			page.present = false;
+			page.readOnly = false;
+			page.used = false;
+			page.dirty = false;
+		}
+		
+		machine.memory().setPageTable(process.pageTable);
+	}
+	
+	/**
+	 * Load a page from memory to the given physical page number
+	 * @param virtualPage
+	 */
+	void loadPage(Page virtualPage, int physicalPageNumber) {
+		// set details in page table entry
+		virtualPage.ppn = physicalPageNumber;
+		virtualPage.pid = process.pid;
+		virtualPage.present = true;
+		virtualPage.readOnly = false;
+		virtualPage.used = false;
+		virtualPage.dirty = false;
+		
+		if(virtualPage.saved){
+			
+			PCB pageProc = processes[virtualPage.pid];
+			
+			// write directly to memory
+			machine.memory().vmEnabled = false;
+			
+			int address = virtualPage.ppn * Configuration.pageSize;
+			
+			for(int i = 0; i < Configuration.pageSize; i++){
+				try {
+					machine.memory().writeMem(address + i, 1, virtualPage.data[i]);
+				} catch (MipsException e) {
+					throw new KernelFault("bad memory address");
+				}
+			}
+			machine.memory().vmEnabled = true;
+			
+		}else{
+			// do nothing - could be a new blank page -
+			// isn't on disk/memory - has to be saved first
+		}
+		
+		// set false because when we are writing to memory 
+		// this will be set dirty when the page actually isn't
+		virtualPage.dirty = false;
 	}
 }

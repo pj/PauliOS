@@ -20,6 +20,8 @@ public class CreateFS {
 	 * @throws IOException 
 	 */
 	public static void main(String[] args) throws IOException {
+		System.out.println("Creating File System");
+		
 		RandomAccessFile fs = new RandomAccessFile(Configuration.diskFileName, "rw");
 
 		// write nulls to file
@@ -75,7 +77,7 @@ public class CreateFS {
 		for(int i = 0; i < entries.length; i++){
 			File file = files[i];
 			
-			//System.out.println(file.getName());
+			System.out.println("Adding - " + file.getName());
 			
 			entries[i] = new FileTableEntry(file.getName(), currentBlock, (int)file.length());
 			

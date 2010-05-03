@@ -22,7 +22,7 @@ public class Configuration {
 	public final static int maxProcesses = 256;
 	
 	/** Name of the program to load and execute on startup*/
-	public static String shellProgramName = "forktest.coff";
+	public static String shellProgramName = "sharedtest.coff";
 	
 	/** first process args */
 	public static String[] processArgs;
@@ -42,7 +42,7 @@ public class Configuration {
 	public static int switchTime = 5;
 	
 	/** delay for the hard drive */
-	public static int driveDelay = 100;
+	public static int driveDelay = 10;
 	
 	/** name of the file that makes up the file system */
 	public static String diskFileName = "filesystem";

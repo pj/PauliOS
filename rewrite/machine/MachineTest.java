@@ -11,8 +11,8 @@ public class MachineTest extends TestCase{
 
 	public void testMachineStart() throws Exception{
 		//Config.load("/Users/pauljohnson/ConcurrentTeaching/eclipse/nachos-rewrite/rewriteconf/nachos.conf");
-		//CreateFS.main(null);
+		CreateFS.main(null);
 		
-		Machine.main(new String[]{});
+		Machine.main(new String[]{"asdf"});
 	}
 }

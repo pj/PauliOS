@@ -27,7 +27,7 @@ import emulator.Processor;
  */
 public class Machine {
 	/** System Kernel */
-	Kernel kernel;
+	public Kernel kernel;
 
 	/** The piece of io hardware that is currently interrupting */
 	public Interrupt interrupting;

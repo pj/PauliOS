@@ -16,7 +16,9 @@ int main(int argc, char** argv)
 	}else{
 		// in parent process
 		printf("In parent process child pid: %d\n", pid);
+		
+		join(pid, statusPointer);
 	}
 	
-	join(pid, statusPointer);
+
 }

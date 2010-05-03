@@ -12,10 +12,6 @@ public class Memory {
 	/** The value to be loaded by the delayed load currently in progress. */
 	private int loadValue;
 
-	/**
-	 * Either an associative or direct-mapped set of translation entries,
-	 * depending on whether there is a TLB.
-	 */
 	public Page[] pages;
 
 	/** Main memory for user programs. */

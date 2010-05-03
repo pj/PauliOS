@@ -94,4 +94,9 @@ public final class Page {
 	 * Process id that page belongs to
 	 */
 	public int pid;
+	
+	/**
+	 * Whether this page has been written out to disk yet
+	 */
+	public boolean saved = false;
 }

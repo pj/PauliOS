@@ -153,16 +153,24 @@ public class BasicFileSystem implements FileSystem{
 	public int create(String name, PCB process){
 		FileTableEntry entry = exists(name);
 		
-		if(entry == null){
-			entry = new FileTableEntry(name, -1, 0);
+		int fid = getFid(process.files);
+		
+		// already exists return fid
+		if(entry != null){
+			entry.openCount++;
 			
-			addFile(entry);
+			process.files[fid] = new OpenFile(entry.name, entry);
 			
-		}else if(entry.deleting){
+			return fid;
+		}
+				
+		entry = new FileTableEntry(name, -1, 0);
+		
+		addFile(entry);
+		
+		if(entry.deleting){
 			return -1;
 		}
-		
-		int fid = getFid(process.files);
 		
 		// find free block to start
 		int blockNumber = findFreeBlock();
@@ -197,6 +205,10 @@ public class BasicFileSystem implements FileSystem{
 			return -1;
 		}
 		
+		if(file.position > file.entry.length){
+			return -1;
+		}
+		
 		int startPosition = file.position;
 		int endPosition = file.position + length;
 		
@@ -205,7 +217,7 @@ public class BasicFileSystem implements FileSystem{
 		}
 		
 		// find first block to read
-		int block = getFirstBlock(file);
+		int block = getFilePositionBlock(file);
 		
 		if(block == -1){
 			return 0;
@@ -287,15 +299,22 @@ public class BasicFileSystem implements FileSystem{
 		return read;
 	}
 
-	private int getFirstBlock(OpenFile file) {
+	/**
+	 * Get block number that file.position is in
+	 * 
+	 * @param file
+	 * @return
+	 */
+	private int getFilePositionBlock(OpenFile file) {
 		int firstBlock = file.entry.firstBlock;
 		
-		int numBlocks = file.position / 1024;
-		
-		for(int i = 0; i < numBlocks; i++){
-			firstBlock = fat[firstBlock];
+		for(int i = 1024; i <= file.entry.length; i += 1024){
+			if(file.position < i){
+				return firstBlock;
+			}else{
+				firstBlock = fat[firstBlock];
+			}
 		}
-		
 		return firstBlock;
 	}
 	
@@ -315,6 +334,43 @@ public class BasicFileSystem implements FileSystem{
 			return -1;
 		}
 		
+		// if file position is greater than file length we need to add blocks and write 0's to them 
+		if(file.position >= file.entry.length){
+			// find the last block in the file
+			int lastBlock = file.entry.firstBlock;
+			int numBlocks = 0;
+			
+			while(fat[lastBlock] != -1){
+				numBlocks++;
+				lastBlock = fat[lastBlock];
+			}
+			
+			// write 0's to the end of the current last block
+			
+//			int lastBlockOffset = file.entry.length % Configuration.blockSize;
+//				
+//			writeDrive( Configuration.fileOffset + (lastBlock*Configuration.blockSize) + lastBlockOffset, new byte[Configuration.blockSize-lastBlockOffset]);
+			
+			
+			// find pages and write 0's to them
+			
+			// number of blocks to add
+			int addBlocks = (file.position / Configuration.blockSize) - numBlocks;
+			
+			for(int i=0; i < addBlocks; i++){
+				int newBlock = findFreeBlock();
+				
+				// write 0's to drive
+				writeDrive(Configuration.fileOffset + (newBlock*Configuration.blockSize), new byte[Configuration.blockSize]);
+				
+				fat[lastBlock] = newBlock;
+				lastBlock = newBlock;
+				fat[lastBlock] = -1;
+			}
+			
+			file.entry.length = file.position;
+		}
+		
 		int startPosition = file.position;
 		int endPosition = file.position + length;
 		
@@ -322,7 +378,7 @@ public class BasicFileSystem implements FileSystem{
 		
 		int diskPosition;
 		
-		int block = getFirstBlock(file);
+		int block = getFilePositionBlock(file);
 		
 		// blockOffset is the offset from the start of the current block usually 0
 		int blockOffset = startPosition % Configuration.blockSize;
@@ -347,8 +403,15 @@ public class BasicFileSystem implements FileSystem{
 				// get new block
 				int newBlock = findFreeBlock();
 				
-				fat[prevBlock] = newBlock;
-				fat[newBlock] = -1;
+				// no previous block means we are setting the first block
+				if(prevBlock == -1){
+					fat[file.entry.firstBlock] = newBlock;
+					fat[newBlock] = -1;
+				}else{
+					fat[prevBlock] = newBlock;
+					fat[newBlock] = -1;
+				}
+
 				
 				// write changes in fat to disk
 				writeDrive(Configuration.bootBlockLength + (prevBlock * 4), Lib.bytesFromInt(newBlock));
@@ -372,7 +435,7 @@ public class BasicFileSystem implements FileSystem{
 			
 			// write to disk
 			diskPosition = Configuration.fileOffset + (block * Configuration.blockSize) + blockOffset;
-				
+						
 			int rval = writeDrive(diskPosition, data);
 			
 			if(rval < 0){
@@ -459,12 +522,8 @@ public class BasicFileSystem implements FileSystem{
 	public int seek(int fid, int position, PCB process){
 		OpenFile file = process.files[fid];
 		
-		if(position < file.entry.length){
-			file.position = position;
-			return 0;
-		}else{
-			return -1;
-		}
+		file.position = position;
+		return file.position;
 	}
 	
 	/**

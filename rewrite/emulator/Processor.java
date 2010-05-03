@@ -194,11 +194,6 @@ public final class Processor {
 	}
 
 	private void fetch() throws MipsException {
-		
-		//System.out.println(this.registers[Processor.regRA]);
-		
-		//System.out.print("pc: " + Integer.toHexString(registers[regPC]) + " ");
-		
 		value = memory.readMem(registers[regPC], 4);
 	}
 
@@ -293,7 +288,12 @@ public final class Processor {
 		}
 
 		//System.out.print(Integer.toHexString(value) + "  ");
-		//EmulatorHelpers.print(this);
+		
+//		if(machine.kernel.process != null && !machine.kernel.process.name.equals("idle.coff")){
+//			System.out.print("pc: " + Integer.toHexString(registers[regPC]) + " ");
+//		
+//			EmulatorHelpers.print(this);
+//		}
 	}
 
 	private void execute() throws MipsException {
