@@ -868,16 +868,12 @@ public class Kernel implements Runnable{
 	void loadPage(Page virtualPage, int physicalPageNumber) {
 		// set details in page table entry
 		virtualPage.ppn = physicalPageNumber;
-		virtualPage.pid = process.pid;
 		virtualPage.present = true;
 		virtualPage.readOnly = false;
 		virtualPage.used = false;
 		virtualPage.dirty = false;
 		
 		if(virtualPage.saved){
-			
-			PCB pageProc = processes[virtualPage.pid];
-			
 			// write directly to memory
 			machine.memory().vmEnabled = false;
 			

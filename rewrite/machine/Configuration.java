@@ -22,7 +22,7 @@ public class Configuration {
 	public final static int maxProcesses = 256;
 	
 	/** Name of the program to load and execute on startup*/
-	public static String shellProgramName = "sharedtest.coff";
+	public static String shellProgramName = "forktest.coff";
 	
 	/** first process args */
 	public static String[] processArgs;
