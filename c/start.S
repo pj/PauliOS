@@ -70,3 +70,4 @@ name:				; \
 	SYSCALLSTUB(initialize, syscallInitialize)
 	SYSCALLSTUB(more_memory, syscallMoreMemory)
 	SYSCALLSTUB(fork, syscallFork)
+	SYSCALLSTUB(chdir, syscallChdir)
