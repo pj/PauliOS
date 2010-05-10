@@ -19,19 +19,14 @@ import kernel.PCB;
 
 public class BasicFileSystem implements FileSystem{
 	/**
-	 * Constants for error numbers
-	 */
-	public static final int non_existant = -1;
-	
-	/**
-	 * File allocation table notes where the next block of the file is
+	 * File allocation table forms a linked list of the blocks that a file contains
 	 */
 	public int[] fat;
 	
+	/**
+	 * Entries for the root directory of the file system
+	 */
 	public FileTableEntry[] files;
-	
-	public boolean[] availableBlocks;
-	
 
 	private Machine machine;
 
@@ -43,9 +38,6 @@ public class BasicFileSystem implements FileSystem{
 		
 		files = new FileTableEntry[Configuration.maxFiles];
 		fat = new int[Configuration.numberOfBlocks];
-		availableBlocks = new boolean[Configuration.numberOfBlocks];
-		
-		Arrays.fill(availableBlocks, false);
 		
 		// load filesystem from hard drive
 		
@@ -72,6 +64,7 @@ public class BasicFileSystem implements FileSystem{
 		
 		byte[] entryData = new byte[32];
 		
+		// create entries for files table
 		for(int i = 0; i < entryCount; i++){
 			System.arraycopy(fileEntries, i*Configuration.fileEntrySize, entryData, 0, 32);
 			files[i] = new FileTableEntry(entryData);
@@ -81,7 +74,7 @@ public class BasicFileSystem implements FileSystem{
 	/**
 	 * Checks whether the file named name exists on the file system.
 	 * 
-	 * @param name
+	 * @param name file name to check
 	 * @return
 	 */
 	FileTableEntry exists(String name){
@@ -100,10 +93,10 @@ public class BasicFileSystem implements FileSystem{
 	}
 	
 	/**
-	 * Gets the first available slot in a processes files.
+	 * Gets the first available index in a processes files and returns it as the file id
 	 * 
 	 * @param files2
-	 * @return
+	 * @return new file id or -1 if table is full
 	 */
 	public int getFid(OpenFile[] files2){
 		for(int i = 2; i < Configuration.maxFiles; i++){
@@ -117,8 +110,11 @@ public class BasicFileSystem implements FileSystem{
 	
 	/**
 	 * Open a file into the process 
+	 * 
+	 * @return the file id of the open file
 	 */
 	public int open(String name, PCB process){
+		// check if file exists
 		FileTableEntry entry = exists(name);
 		
 		if(entry == null || entry.deleting){
@@ -134,9 +130,11 @@ public class BasicFileSystem implements FileSystem{
 		return fid;
 	}
 	
-
-	
+	/**
+	 * close a file returning 0 if successful and -1 if unsuccessful
+	 */
 	public int close(int fid, PCB process){	
+		// check that fid exists
 		OpenFile entry = process.files[fid];
 
 		if(entry == null){
@@ -145,11 +143,21 @@ public class BasicFileSystem implements FileSystem{
 		
 		entry.entry.openCount--;
 		
-		process.files[fid] = null;		
+		process.files[fid] = null;
 		
-		return 0;
+		// delete if unlink has set deleting on the entry
+		if(entry.entry.openCount == 0 && entry.entry.deleting){
+			return deleteFile(entry.entry);
+		}else{
+			return 0;
+		}
 	}
 	
+	/**
+	 * Create a file if it doesn't exist or open it if it already exists
+	 * 
+	 * @return new fid for the open file
+	 */
 	public int create(String name, PCB process){
 		FileTableEntry entry = exists(name);
 		
@@ -193,18 +201,31 @@ public class BasicFileSystem implements FileSystem{
 	}
 
 
-
-	public int read(int fid, int length, int bufferPointer, Kernel kernel, PCB process) {
+	/**
+	 * Read from a file to the memory of the process
+	 * 
+	 * @param fid id of the file to read from
+	 * @param length number of bytes to read
+	 * @param memoryPointer address in memory to read into
+	 * @param kernel the kernel
+	 * @param process to get OpenFile from
+	 * @return how many bytes were read or -1 if there was an error, note might be less than length
+	 * 			if end of file has been reached.
+	 * 
+	 */
+	public int read(int fid, int length, int memoryPointer, Kernel kernel, PCB process) {
 		if(fid > Configuration.maxFiles || fid < 0){
 			return -1;
 		}
 		
+		// check if the file exists
 		OpenFile file = process.files[fid];
 		
 		if(file == null){
 			return -1;
 		}
 		
+		// are we trying to read data we haven't written
 		if(file.position > file.entry.length){
 			return -1;
 		}
@@ -257,12 +278,12 @@ public class BasicFileSystem implements FileSystem{
 			}
 			
 			// check bufferPointer page is in memory
-			kernel.checkInMemory(bufferPointer);
+			kernel.checkInMemory(memoryPointer);
 			
 			// copy read data into memory
 			for(int i = 0; i < data.length; i++){
 				try {
-					machine.memory().writeMem(bufferPointer++, 1, data[i]);
+					machine.memory().writeMem(memoryPointer++, 1, data[i]);
 				// bad address - should not be page fault here
 				} catch (MipsException e) {
 					return -1;
@@ -298,31 +319,19 @@ public class BasicFileSystem implements FileSystem{
 		
 		return read;
 	}
-
-	/**
-	 * Get block number that file.position is in
-	 * 
-	 * @param file
-	 * @return
-	 */
-	private int getFilePositionBlock(OpenFile file) {
-		int firstBlock = file.entry.firstBlock;
-		
-		for(int i = 1024; i <= file.entry.length; i += 1024){
-			if(file.position < i){
-				return firstBlock;
-			}else{
-				firstBlock = fat[firstBlock];
-			}
-		}
-		return firstBlock;
-	}
 	
 	/**
-	 * Write from a buffer in memory to disk.
+	 * Write from memory to a file
+	 * 
+	 * @param fid id of the file to write to
+	 * @param length number of bytes to write
+	 * @param memoryPointer address in memory to write from
+	 * @param kernel the kernel
+	 * @param process to get OpenFile from
+	 * @return how many bytes were written or -1 if there was an error
 	 * 
 	 */
-	public int write(int fid, int length, int startPointer, Kernel kernel, PCB process) {
+	public int write(int fid, int length, int memoryPointer, Kernel kernel, PCB process) {
 	
 		if(fid > Configuration.maxFiles || fid < 0){
 			return -1;
@@ -423,11 +432,11 @@ public class BasicFileSystem implements FileSystem{
 			// read from memory to data
 			data = new byte[blockLength];
 			
-			kernel.checkInMemory(startPointer);
+			kernel.checkInMemory(memoryPointer);
 			
 			for(int i = 0; i < blockLength; i++){
 				try {
-					data[i] = (byte)machine.memory().readMem(startPointer++, 1);
+					data[i] = (byte)machine.memory().readMem(memoryPointer++, 1);
 				} catch (MipsException e) {
 					return -1;
 				}
@@ -473,7 +482,28 @@ public class BasicFileSystem implements FileSystem{
 	}
 	
 	/**
-	 * Delete the named file
+	 * Get block number that file.position is in
+	 * 
+	 * @param file to get position from
+	 * @return block number that contains the position
+	 */
+	private int getFilePositionBlock(OpenFile file) {
+		int firstBlock = file.entry.firstBlock;
+		
+		for(int i = 1024; i <= file.entry.length; i += 1024){
+			if(file.position < i){
+				return firstBlock;
+			}else{
+				firstBlock = fat[firstBlock];
+			}
+		}
+		return firstBlock;
+	}
+	
+	/**
+	 * Delete the named file - if it is still open by a process then mark the entry as deleting
+	 * 
+	 * @return 0 on success -1 on failure
 	 */
 	public int unlink(String name){
 		FileTableEntry fte = exists(name);
@@ -484,53 +514,60 @@ public class BasicFileSystem implements FileSystem{
 			fte.deleting = true;
 			return 0;
 		}else{
-			// remove file from entry table and fat table
-			int blockNumber = fte.firstBlock;
+			return deleteFile(fte);
+		}
+	}
+
+	/**
+	 * Actually delete a file - can be called from close as well as unlink
+	 * 
+	 * @param fte entry to delete
+	 * @return -1 on failure 0 on success
+	 */
+	private int deleteFile(FileTableEntry fte) {
+		// remove file from entry table and fat table
+		int blockNumber = fte.firstBlock;
+		
+		int t;
+		
+		while(blockNumber != -1){
+			t = fat[blockNumber];
 			
-			int t;
+			fat[blockNumber] = -2;
 			
-			while(blockNumber != -1){
-				t = fat[blockNumber];
+			writeDrive(Configuration.bootBlockLength  + (blockNumber*4), Lib.bytesFromInt(-2));
+			
+			blockNumber = t;
+			break;
+		}
+		
+		// remove entry
+		for(int i = 1; i < Configuration.maxFiles; i++){
+			if(files[i] != null && files[i].equals(fte)){
 				
-				availableBlocks[blockNumber] = false;
+				writeDrive(Configuration.bootBlockLength + Configuration.fatLength + (i * Configuration.fileEntrySize), new byte[Configuration.fileEntrySize]);
 				
-				fat[blockNumber] = -2;
-				
-				writeDrive(Configuration.bootBlockLength  + (blockNumber*4), Lib.bytesFromInt(-2));
-				
-				blockNumber = t;
+				files[i] = null;
 				break;
 			}
-			
-			// remove entry
-			for(int i = 1; i < Configuration.maxFiles; i++){
-				if(files[i] != null && files[i].equals(fte)){
-					
-					writeDrive(Configuration.bootBlockLength + Configuration.fatLength + (i * Configuration.fileEntrySize), new byte[Configuration.fileEntrySize]);
-					
-					files[i] = null;
-					break;
-				}
-			}
-			return 0;
 		}
+		return 0;
 	}
 	
 	/**
 	 * Set the file position to a new position
 	 */
-	public int seek(int fid, int position, PCB process){
+	public void seek(int fid, int position, PCB process){
 		OpenFile file = process.files[fid];
 		
 		file.position = position;
-		return file.position;
 	}
 	
 	/**
-	 * Read from hard drive
+	 * Read from physical drive
 	 * 
-	 * @param position
-	 * @param data
+	 * @param position on disk to read from
+	 * @param data data buffer to read into
 	 * @return
 	 */
 	private int readDrive(int position, byte[] data){
@@ -551,8 +588,8 @@ public class BasicFileSystem implements FileSystem{
 	/**
 	 * Write to hard drive
 	 * 
-	 * @param position
-	 * @param data
+	 * @param position to write to
+	 * @param data buffer to write to drive
 	 * @return
 	 */
 	private int writeDrive(int position, byte[] data){
@@ -626,6 +663,21 @@ public class BasicFileSystem implements FileSystem{
 	
 	public FileTableEntry[] getFiles(){
 		return files;
+	}
+
+	@Override
+	public int chdir(String path, PCB process) {
+		return -1;
+	}
+
+	@Override
+	public int mkdir(String path, PCB process) {
+		return -1;
+	}
+
+	@Override
+	public int rmdir(String path, PCB process) {
+		return -1;
 	}
 
 

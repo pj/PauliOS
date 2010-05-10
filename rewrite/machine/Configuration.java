@@ -89,6 +89,13 @@ public class Configuration {
 	public static int fileLengthOffset = 24;
 	public static int fileLengthLength = 4;
 	
+	// position of flags within file entry table
+	public static int fileFlagsOffset = 16;
+	public static int fileFlagsLength = 1;
+	
+	// mask to get directory bit
+	public static int directoryBitMask = 0x1;
+	
 	/** Details for superblock */
 	
 	// length of root directory

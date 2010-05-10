@@ -27,6 +27,8 @@
 #define syscallMoreMemory	14
 #define syscallFork			15
 #define syscallChdir		16
+#define syscallMkdir		17
+#define syscallRmdir		18
 
 /* Don't want the assembler to see C code, but start.s includes syscall.h. */
 #ifndef START_S
@@ -264,6 +266,16 @@ int fork();
 * change the working directory of the current process
 */
 int chdir(char *path);
+
+/**
+* Create a directory 
+*/
+int mkdir(char *path);
+
+/**
+* remove a directory - must be empty
+*/
+int rmdir(char *path);
 
 #endif /* START_S */
 

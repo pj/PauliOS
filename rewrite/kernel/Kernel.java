@@ -50,7 +50,8 @@ public class Kernel implements Runnable{
 	private static final int syscallHalt = 0, syscallExit = 1, syscallExec = 2,
 	syscallJoin = 3, syscallCreate = 4, syscallOpen = 5,
 	syscallRead = 6, syscallWrite = 7, syscallClose = 8,
-	syscallUnlink = 9, syscallKernelInit = 13, syscallMoreMemory = 14, syscallFork = 15;
+	syscallUnlink = 9, syscallKernelInit = 13, syscallMoreMemory = 14, syscallFork = 15,
+	syscallChdir = 16, syscallMkdir = 17, syscallRmdir = 18;
 	
 	private Machine machine;
 	

@@ -1,6 +1,7 @@
 package filesystem;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
@@ -13,7 +14,9 @@ import machine.Lib;
 public class CreateFS {
 
 	/**
-	 * This is a script to create a filesystem from the files in the files directory
+	 * This is a script to create a filesystem from the files in the files/ directory.
+	 * 
+	 * It ignores directories
 	 * 
 	 * 
 	 * @param args
@@ -24,7 +27,7 @@ public class CreateFS {
 		
 		RandomAccessFile fs = new RandomAccessFile(Configuration.diskFileName, "rw");
 
-		// write nulls to file
+		// erase file
 		byte[] nulls = new byte[Configuration.blockSize];
 		
 		for(int i = 0; i < Configuration.numberOfBlocks+Configuration.systemBlocks; i++){
@@ -32,7 +35,7 @@ public class CreateFS {
 		}
 		
 		
-		// open boot block and write first kilobyte to file
+		// open boot block and write to first kilobyte to file
 		File boot_block = new File("boot_block");
 		
 		FileInputStream bbfis = new FileInputStream(boot_block);
@@ -43,13 +46,14 @@ public class CreateFS {
 		fs.seek(0);
 		fs.write(bbbytes);
 		
-		// get list of files from c directory
+		// get list of files from files directory
 		File testDir = new File("files/");
 		
-		File[] files = testDir.listFiles(new FilenameFilter() {
+		File[] files = testDir.listFiles(new FileFilter() {
 			@Override
-			public boolean accept(File dir, String name) {
-				if(name.startsWith(".")){
+			public boolean accept(File file) {
+				// ignore '.' entries and directories
+				if(file.getName().startsWith(".") || file.isDirectory() ){
 					return false;
 				}else{
 					return true;
@@ -57,10 +61,7 @@ public class CreateFS {
 			}
 		});
 		
-		// get list of files from files directory
-		
-		
-		
+		// load files and create entry table
 		FileTableEntry[] entries = new FileTableEntry[files.length];
 		
 		int currentBlock = 0;
@@ -107,6 +108,7 @@ public class CreateFS {
 		fs.write(Lib.bytesFromInt(files.length));
 		
 		
+		// write entries to disk
 		fs.seek(Configuration.bootBlockLength + Configuration.fatLength + Configuration.superBlockSize);
 		
 		for(int i = 0; i < entries.length; i++){

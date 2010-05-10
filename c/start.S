@@ -71,3 +71,5 @@ name:				; \
 	SYSCALLSTUB(more_memory, syscallMoreMemory)
 	SYSCALLSTUB(fork, syscallFork)
 	SYSCALLSTUB(chdir, syscallChdir)
+	SYSCALLSTUB(mkdir, syscallMkdir)
+	SYSCALLSTUB(rmdir, syscallRmdir)

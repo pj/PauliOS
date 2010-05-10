@@ -18,9 +18,15 @@ public interface FileSystem {
 	
 	public int unlink(String name);
 	
-	public int seek(int fid, int position, PCB process);
+	public void seek(int fid, int position, PCB process);
 	
 	public void initialize(Machine machine);
+	
+	public int chdir(String path, PCB process);
+	
+	public int mkdir(String path, PCB process);
+	
+	public int rmdir(String path, PCB process);
 	
 	public FileTableEntry[] getFiles();
 }

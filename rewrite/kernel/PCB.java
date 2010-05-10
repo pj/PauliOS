@@ -51,5 +51,8 @@ public class PCB {
 	
 	// files
 	public OpenFile[] files = new OpenFile[Configuration.maxFiles];
+	
+	// Start at root directory
+	public int cwdBlock = 0;
 
 }
