@@ -3,6 +3,12 @@ package filesystem;
 import machine.Configuration;
 import machine.Lib;
 
+/**
+ * This class corresponds to a file entry on disk
+ * 
+ * @author pauljohnson
+ *
+ */
 public class FileTableEntry {
 	public FileTableEntry(String name2, int firstBlock, int length) {
 		this.name = name2;

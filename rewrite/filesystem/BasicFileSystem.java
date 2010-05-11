@@ -24,14 +24,19 @@ public class BasicFileSystem implements FileSystem{
 	public int[] fat;
 	
 	/**
-	 * Entries for the root directory of the file system
+	 * Entries of the root directory of the file system.
+	 * 
+	 * Note that this isn't the same as the processes files array which is the list of files
+	 * that a process has open
+	 * 
 	 */
 	public FileTableEntry[] files;
 
 	private Machine machine;
 
 	/**
-	 * Loads the file system from the hard drive and creates the necessary data structures to support file system operation.
+	 * Loads the file system from the hard drive and creates the necessary data structures 
+	 * to support file system operation.
 	 */
 	public void initialize(Machine machine){
 		this.machine = machine;
@@ -72,10 +77,10 @@ public class BasicFileSystem implements FileSystem{
 	}
 	
 	/**
-	 * Checks whether the file named name exists on the file system.
+	 * Checks whether the file named "name" exists on the file system.
 	 * 
 	 * @param name file name to check
-	 * @return
+	 * @return the FileTableEntry with the name given or null if it doesn't exist
 	 */
 	FileTableEntry exists(String name){
 		for(int i = 0; i < Configuration.maxFiles; i++){
@@ -636,6 +641,12 @@ public class BasicFileSystem implements FileSystem{
 		machine.getInterrupts().addAll(reinterrupts);
 	}
 	
+	/**
+	 * Add an entry to the files[] array.
+	 * 
+	 * @param of entry to add
+	 * @return index into the file table that the entry has been added to
+	 */
 	public int addFile(FileTableEntry of){
 		for(int i = 1; i < Configuration.maxFiles; i++){
 			if(files[i] == null){
@@ -666,19 +677,34 @@ public class BasicFileSystem implements FileSystem{
 	}
 
 	@Override
+	/**
+	 * Change the working directory of a process to the one in path
+	 * 
+	 * @return 0 if path exists and is a directory, -1 if it doesn't exist or is a file
+	 */
 	public int chdir(String path, PCB process) {
 		return -1;
 	}
 
 	@Override
+	/**
+	 * Create a new directory, including the "." and ".." entries.
+	 * 
+	 * Note: doesn't need to create intermediate directories if they don't exist.
+	 * 
+	 * @return 0 if directory was successfully created -1 if it wasn't.
+	 */
 	public int mkdir(String path, PCB process) {
 		return -1;
 	}
 
 	@Override
+	/**
+	 * Delete a directory if it is empty i.e. it only has the "." and ".." entries in it.
+	 * 
+	 * @return 0 if directory was successfully deleted, -1 if it wasn't.
+	 */
 	public int rmdir(String path, PCB process) {
 		return -1;
 	}
-
-
 }

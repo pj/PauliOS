@@ -49,10 +49,11 @@ public class PCB {
 	// counter for how long this process should simulate IO waiting
 	public int waitTicks;
 	
-	// files
+	// The files this process has open - the index into this array is the file id -
+	// usually called fid
 	public OpenFile[] files = new OpenFile[Configuration.maxFiles];
 	
-	// Start at root directory
+	// Current Working Directory of process
 	public int cwdBlock = 0;
 
 }
