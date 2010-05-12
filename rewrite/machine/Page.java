@@ -1,5 +1,3 @@
-// PART OF THE MACHINE SIMULATION. DO NOT CHANGE.
-
 package machine;
 
 
