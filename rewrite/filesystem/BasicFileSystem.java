@@ -140,19 +140,19 @@ public class BasicFileSystem implements FileSystem{
 	 */
 	public int close(int fid, PCB process){	
 		// check that fid exists
-		OpenFile entry = process.files[fid];
+		OpenFile file = process.files[fid];
 
-		if(entry == null){
+		if(file == null){
 			return -1;
 		}
 		
-		entry.entry.openCount--;
+		file.entry.openCount--;
 		
 		process.files[fid] = null;
 		
 		// delete if unlink has set deleting on the entry
-		if(entry.entry.openCount == 0 && entry.entry.deleting){
-			return deleteFile(entry.entry);
+		if(file.entry.openCount == 0 && file.entry.deleting){
+			return deleteFile(file.entry);
 		}else{
 			return 0;
 		}
