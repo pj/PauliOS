@@ -16,7 +16,7 @@ public class DirectoryTest extends TestCase {
 	
 	@Override
 	protected void setUp() throws Exception {
-		CreateFS.main(null);
+		DirectoryCreateFS.main(null);
 		
 		machine = new Machine();
 		machine.createDevices();
@@ -37,13 +37,17 @@ public class DirectoryTest extends TestCase {
 		
 		int rval = fs.chdir("test", process);
 		assertTrue(rval == 0);
-		assertTrue(process.cwdBlock == 99);
+		assertTrue(process.cwdBlock != 0);
 		
 		rval = fs.chdir(".", process);
 		assertTrue(rval == 0);
-		assertTrue(process.cwdBlock == 99);
+		assertTrue(process.cwdBlock != 0);
 
 		rval = fs.chdir("..", process);
+		assertTrue(rval == 0);
+		assertTrue(process.cwdBlock == 0);
+		
+		rval = fs.chdir("/..", process);
 		assertTrue(rval == 0);
 		assertTrue(process.cwdBlock == 0);
 	}
@@ -53,11 +57,11 @@ public class DirectoryTest extends TestCase {
 		
 		int rval = fs.chdir("/test", process);
 		assertTrue(rval == 0);
-		assertTrue(process.cwdBlock == 99);
+		assertTrue(process.cwdBlock != 99);
 		
 		rval = fs.chdir(".", process);
 		assertTrue(rval == 0);
-		assertTrue(process.cwdBlock == 99);
+		assertTrue(process.cwdBlock != 99);
 		
 		rval = fs.chdir("..", process);
 		assertTrue(rval == 0);
@@ -65,7 +69,7 @@ public class DirectoryTest extends TestCase {
 		
 		rval = fs.chdir("/test", process);
 		assertTrue(rval == 0);
-		assertTrue(process.cwdBlock == 99);
+		assertTrue(process.cwdBlock != 99);
 		
 		rval = fs.chdir("/", process);
 		assertTrue(rval == 0);

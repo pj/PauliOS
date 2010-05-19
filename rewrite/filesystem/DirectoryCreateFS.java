@@ -47,7 +47,7 @@ public class DirectoryCreateFS {
 		// blank fat table
 		Arrays.fill(fat, -2);
 
-		writeFiles(testDir, fs, Configuration.systemBlocks, testDir.listFiles().length);
+		writeFiles(testDir, fs, 0, testDir.listFiles().length);
 		
 		// write fat table out to disk
 		fs.seek(Configuration.bootBlockLength);
